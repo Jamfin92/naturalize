@@ -200,4 +200,7 @@ It is a demo. To hold real records it needs, at minimum:
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE). Bundled PT Serif and PT Sans are SIL OFL.
+MIT — see [LICENSE](LICENSE).
+
+Bundled PT Serif and PT Sans are SIL OFL; every dependency is permissively licensed. See
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
