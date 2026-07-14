@@ -44,3 +44,7 @@ artifacts/
 *.sqlite
 *.sqlite3
 api/src/Naturalization.Api/Storage/
+
+.e2e/
+test-results/
+playwright-report/

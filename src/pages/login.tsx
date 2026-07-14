@@ -1,29 +1,56 @@
 import { useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
-import { Moon, ShieldCheck, Sun } from 'lucide-react'
+import { Navigate, useLocation } from 'react-router-dom'
+import { AlertCircle, KeyRound, Moon, Sun } from 'lucide-react'
 
 import { UsFlag } from '@/components/flag/us-flag'
 import { useTheme } from '@/components/theme-provider'
 import { useAuth } from '@/lib/auth'
+import { ApiError } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
+/** Landing page after sign-in when nothing more specific was requested. */
+const HOME = '/dashboard'
+
 export function LoginPage() {
   const { officer, signIn } = useAuth()
   const { theme, toggleTheme } = useTheme()
-  const navigate = useNavigate()
+  const location = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
-  if (officer) return <Navigate to="/dashboard" replace />
+  /*
+   * RequireAuth stashes the page they were trying to reach. Honour it: bouncing
+   * someone to the dashboard after they asked for /applicants/42 and got
+   * intercepted is a small betrayal that the old code committed every time.
+   */
+  const intended = (location.state as { from?: string } | null)?.from ?? HOME
 
-  const handleSubmit = (e: React.FormEvent) => {
+  if (officer) return <Navigate to={intended} replace />
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email.trim()) return
-    signIn(email.trim())
-    navigate('/dashboard')
+    setError(null)
+    setSubmitting(true)
+
+    try {
+      await signIn(email.trim(), password)
+      // No navigate() here: signIn sets the officer, and the <Navigate> above
+      // then redirects. Navigating here as well races that render.
+    } catch (err: unknown) {
+      setError(
+        err instanceof ApiError && err.status === 401
+          ? 'Those credentials were not recognised.'
+          : err instanceof Error
+            ? err.message
+            : 'Could not sign in.',
+      )
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -122,26 +149,43 @@ export function LoginPage() {
                     placeholder="••••••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    required
                   />
                 </div>
 
-                <Button type="submit" className="w-full">
-                  Sign in
+                {error && (
+                  <div
+                    role="alert"
+                    className="border-destructive/40 bg-destructive/10 text-destructive flex items-start gap-2 rounded-md border px-3 py-2 text-xs"
+                  >
+                    <AlertCircle className="mt-px size-3.5 shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                <Button type="submit" className="w-full" disabled={submitting}>
+                  {submitting ? 'Signing in…' : 'Sign in'}
                 </Button>
               </form>
 
               {/*
-               * Stated plainly and in the UI, not just the README. Anyone who
-               * stands this up should know before they type anything that the
-               * login does not actually verify a thing.
+               * The credentials are printed here because this is a demo whose
+               * every applicant is fabricated, and a sign-in wall with no way
+               * through helps nobody. The README says the same, at more length.
                */}
               <div className="border-accent bg-accent/10 text-foreground/80 flex gap-2.5 rounded-md border-l-2 py-2.5 pr-3 pl-3 text-xs leading-relaxed">
-                <ShieldCheck className="text-accent mt-px size-4 shrink-0" />
-                <p>
-                  <span className="text-foreground font-semibold">Demo build.</span> Authentication
-                  is stubbed — any email signs you in, and all case data is fabricated. Wire up a
-                  real identity provider before deploying this anywhere.
-                </p>
+                <KeyRound className="text-accent mt-px size-4 shrink-0" />
+                <div className="space-y-1">
+                  <p>
+                    <span className="text-foreground font-semibold">Demo build.</span> Sign in with{' '}
+                    <code className="font-mono">a.hernandez@example.gov</code> /{' '}
+                    <code className="font-mono">Naturalize!Demo1</code>. All case data is fabricated.
+                  </p>
+                  <p>
+                    Accounts are seeded and the signing key ships in the repo — provision a real
+                    identity provider before this goes anywhere near a real record.
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>

@@ -10,6 +10,7 @@ import { LoginPage } from '@/pages/login'
 import { DashboardPage } from '@/pages/dashboard'
 import { ApplicantsPage } from '@/pages/applicants'
 import { ApplicantDetailPage } from '@/pages/applicant-detail'
+import { ApplicantFormPage } from '@/pages/applicant-form'
 import { CasesPage } from '@/pages/cases'
 import { CaseDetailPage } from '@/pages/case-detail'
 import { ApprovalsPage } from '@/pages/approvals'
@@ -18,9 +19,13 @@ import { ReportsPage } from '@/pages/reports'
 export default function App() {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <TooltipProvider delayDuration={200}>
-          <BrowserRouter>
+      {/*
+       * AuthProvider sits INSIDE BrowserRouter: it redirects to the sign-in page
+       * when a token expires, so it needs router hooks. Outside, useNavigate throws.
+       */}
+      <BrowserRouter>
+        <AuthProvider>
+          <TooltipProvider delayDuration={200}>
             <Routes>
               <Route path="/" element={<LoginPage />} />
 
@@ -33,7 +38,9 @@ export default function App() {
               >
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/applicants" element={<ApplicantsPage />} />
+                <Route path="/applicants/new" element={<ApplicantFormPage />} />
                 <Route path="/applicants/:id" element={<ApplicantDetailPage />} />
+                <Route path="/applicants/:id/edit" element={<ApplicantFormPage />} />
                 <Route path="/cases" element={<CasesPage />} />
                 <Route path="/cases/:id" element={<CaseDetailPage />} />
                 <Route path="/approvals" element={<ApprovalsPage />} />
@@ -42,10 +49,10 @@ export default function App() {
 
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-          </BrowserRouter>
-          <Toaster />
-        </TooltipProvider>
-      </AuthProvider>
+            <Toaster />
+          </TooltipProvider>
+        </AuthProvider>
+      </BrowserRouter>
     </ThemeProvider>
   )
 }

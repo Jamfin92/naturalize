@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Search } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 
 import { EmptyState, ErrorState, LoadingRows, PageHeader } from '@/components/page'
 import { Button } from '@/components/ui/button'
@@ -43,20 +43,29 @@ export function ApplicantsPage() {
         title="Applicants"
         description="Everyone on file, whether or not they have an open case."
         actions={
-          <form onSubmit={submit} className="flex gap-2">
-            <div className="relative">
-              <Search className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
-              <Input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Name or A-Number…"
-                className="w-56 pl-8"
-              />
-            </div>
-            <Button type="submit" variant="secondary">
-              Search
+          <div className="flex gap-2">
+            <form onSubmit={submit} className="flex gap-2">
+              <div className="relative">
+                <Search className="text-muted-foreground absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
+                <Input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Name or A-Number…"
+                  className="w-56 pl-8"
+                />
+              </div>
+              <Button type="submit" variant="secondary">
+                Search
+              </Button>
+            </form>
+
+            <Button asChild>
+              <Link to="/applicants/new">
+                <Plus className="size-4" />
+                New applicant
+              </Link>
             </Button>
-          </form>
+          </div>
         }
       />
 
