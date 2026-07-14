@@ -1,16 +1,5 @@
 import { clearToken, getToken } from './token'
-import type {
-  Applicant,
-  AuditEvent,
-  CaseDetail,
-  CaseStatus,
-  DashboardMetrics,
-  Decision,
-  DecisionOutcome,
-  NaturalizationCase,
-  Officer,
-  Paged,
-} from './types'
+import type { Applicant, AuditEvent, NaturalizationCase, Officer, Paged } from './types'
 
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5099'
 
@@ -167,8 +156,6 @@ export const api = {
     me: () => request<Officer>('/api/auth/me'),
   },
 
-  metrics: () => request<DashboardMetrics>('/api/metrics'),
-
   applicants: {
     list: (params: { q?: string; page?: number; pageSize?: number } = {}) =>
       request<Paged<Applicant>>(`/api/applicants${query(params)}`),
@@ -180,39 +167,11 @@ export const api = {
     remove: (id: number) => request<void>(`/api/applicants/${id}`, { method: 'DELETE' }),
     restore: (id: number) =>
       request<Applicant>(`/api/applicants/${id}/restore`, { method: 'POST' }),
+    // The applicant's cases are still readable here (the endpoint stays in
+    // ApplicantEndpoints); their detail screens, and everything that mutates a
+    // case, live on the enhancement branch.
     cases: (id: number) => request<NaturalizationCase[]>(`/api/applicants/${id}/cases`),
     history: (id: number) => request<AuditEvent[]>(`/api/applicants/${id}/history`),
-  },
-
-  cases: {
-    list: (params: { q?: string; status?: CaseStatus; page?: number; pageSize?: number } = {}) =>
-      request<Paged<NaturalizationCase>>(`/api/cases${query(params)}`),
-    get: (id: number) => request<CaseDetail>(`/api/cases/${id}`),
-    create: (body: {
-      applicantId: number
-      receiptNumber: string
-      filedOn: string
-      fieldOffice: string
-    }) => request<NaturalizationCase>('/api/cases', { method: 'POST', body: JSON.stringify(body) }),
-    remove: (id: number) => request<void>(`/api/cases/${id}`, { method: 'DELETE' }),
-    // No `actor`: the API takes it from the bearer token now.
-    transition: (id: number, body: { status: CaseStatus; notes?: string }) =>
-      request<NaturalizationCase>(`/api/cases/${id}/status`, {
-        method: 'POST',
-        body: JSON.stringify(body),
-      }),
-  },
-
-  decisions: {
-    list: (params: { from?: string; to?: string; fieldOffice?: string } = {}) =>
-      request<Decision[]>(`/api/decisions${query(params)}`),
-    // No `decidedBy`, for the same reason.
-    create: (body: {
-      caseId: number
-      outcome: DecisionOutcome
-      rationale: string
-      denialReasonCode?: string
-    }) => request<Decision>('/api/decisions', { method: 'POST', body: JSON.stringify(body) }),
   },
 
   reports: {

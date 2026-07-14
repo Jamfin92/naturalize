@@ -174,11 +174,18 @@ app.MapGet("/health", () => TypedResults.Ok(new { status = "ok" }))
     .WithName("Health")
     .AllowAnonymous();
 
+/*
+ * This build is scoped to applicants + reports. The case queue, status
+ * transitions, decisions and evidence endpoints live on the
+ * `enhancement/case-workflow` branch.
+ *
+ * The case/decision/document DOMAIN, DbSets, CaseMetrics and StatusTransitions
+ * all deliberately remain: the reports read them (the Case Record PDF prints a
+ * case's audit trail; Pipeline reads the whole caseload). Only the HTTP surface
+ * that let a caller mutate them was removed.
+ */
 app.MapAuth();
 app.MapApplicants();
-app.MapCases();
-app.MapDecisions();
-app.MapDocuments();
 app.MapReports();
 
 app.Run();

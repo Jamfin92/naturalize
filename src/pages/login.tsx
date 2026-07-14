@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 /** Landing page after sign-in when nothing more specific was requested. */
-const HOME = '/dashboard'
+const HOME = '/applicants'
 
 export function LoginPage() {
   const { officer, signIn } = useAuth()
