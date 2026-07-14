@@ -1,1 +1,261 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/source-sans-3";
+@import "@fontsource/libre-baskerville/400.css";
+@import "@fontsource/libre-baskerville/700.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Theme: "Parchment & Old Glory"
+ *
+ * Two hues plus brass. The flag's own colors, converted to OKLCH, ARE the
+ * semantic tokens — Old Glory Blue is --primary, Old Glory Red is --destructive.
+ * Neutrals are warm (hue ~85, low chroma): parchment, not gray. That single
+ * move is most of what keeps this from reading as default shadcn slate.
+ */
+
+@theme inline {
+    --font-heading: 'Libre Baskerville', Georgia, serif;
+    --font-sans: 'Source Sans 3 Variable', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-success: var(--success);
+    --color-success-foreground: var(--success-foreground);
+    --color-warning: var(--warning);
+    --color-warning-foreground: var(--warning-foreground);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+
+    --color-flag-red: var(--flag-red);
+    --color-flag-white: var(--flag-white);
+    --color-flag-blue: var(--flag-blue);
+
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+    /* Squarer than shadcn's 0.625rem — reads engraved rather than bubbly. */
+    --radius: 0.375rem;
+
+    /* --- Parchment (light) --- */
+    --background: oklch(0.977 0.008 85);        /* warm ivory */
+    --foreground: oklch(0.240 0.030 275);       /* iron-gall ink, blue-black */
+    --card: oklch(0.992 0.005 90);              /* laid paper */
+    --card-foreground: oklch(0.240 0.030 275);
+    --popover: oklch(0.995 0.004 90);
+    --popover-foreground: oklch(0.240 0.030 275);
+
+    --primary: oklch(0.379 0.086 283);          /* Old Glory Blue #3C3B6E */
+    --primary-foreground: oklch(0.980 0.010 90);
+
+    --secondary: oklch(0.930 0.017 85);         /* aged paper */
+    --secondary-foreground: oklch(0.320 0.050 280);
+
+    --muted: oklch(0.945 0.012 85);
+    --muted-foreground: oklch(0.470 0.030 275);
+
+    --accent: oklch(0.720 0.105 82);            /* brass / gilt */
+    --accent-foreground: oklch(0.240 0.040 80); /* umber ink on brass */
+
+    --destructive: oklch(0.499 0.178 21);       /* Old Glory Red #B22234 */
+    --destructive-foreground: oklch(0.980 0.010 90);
+
+    --success: oklch(0.520 0.100 155);          /* evergreen — approved */
+    --success-foreground: oklch(0.980 0.010 90);
+    --warning: oklch(0.750 0.130 75);           /* amber — needs review */
+    --warning-foreground: oklch(0.240 0.040 80);
+
+    --border: oklch(0.880 0.018 85);            /* warm rule line */
+    --input: oklch(0.900 0.016 85);
+    --ring: oklch(0.550 0.100 283);             /* navy focus ring */
+
+    --chart-1: oklch(0.499 0.178 21);           /* flag red    */
+    --chart-2: oklch(0.440 0.100 262);          /* deep blue   */
+    --chart-3: oklch(0.720 0.105 82);           /* brass       */
+    --chart-4: oklch(0.550 0.090 200);          /* harbor teal */
+    --chart-5: oklch(0.420 0.060 300);          /* plum        */
+
+    --sidebar: oklch(0.955 0.014 85);
+    --sidebar-foreground: oklch(0.280 0.035 277);
+    --sidebar-primary: oklch(0.379 0.086 283);
+    --sidebar-primary-foreground: oklch(0.980 0.010 90);
+    --sidebar-accent: oklch(0.910 0.020 85);
+    --sidebar-accent-foreground: oklch(0.300 0.050 280);
+    --sidebar-border: oklch(0.880 0.018 85);
+    --sidebar-ring: oklch(0.550 0.100 283);
+
+    /*
+     * Flag literals. NEVER themed, never token-mapped to a semantic color:
+     * the flag does not change color in dark mode.
+     */
+    --flag-red: #b22234;
+    --flag-white: #ffffff;
+    --flag-blue: #3c3b6e;
+}
+
+.dark {
+    /* --- Midnight Session (dark) --- */
+    --background: oklch(0.190 0.028 278);       /* deep navy-black */
+    --foreground: oklch(0.940 0.012 88);        /* warm parchment text */
+    --card: oklch(0.235 0.030 278);
+    --card-foreground: oklch(0.940 0.012 88);
+    --popover: oklch(0.245 0.030 278);
+    --popover-foreground: oklch(0.940 0.012 88);
+
+    /* Navy lifted out of the background so it stays legible as a fill. */
+    --primary: oklch(0.680 0.115 275);
+    --primary-foreground: oklch(0.170 0.030 278);
+
+    --secondary: oklch(0.290 0.030 278);
+    --secondary-foreground: oklch(0.930 0.012 88);
+
+    --muted: oklch(0.270 0.026 278);
+    --muted-foreground: oklch(0.720 0.020 280);
+
+    --accent: oklch(0.780 0.110 84);            /* brighter brass */
+    --accent-foreground: oklch(0.200 0.040 80);
+
+    --destructive: oklch(0.600 0.175 22);       /* red lifted for dark bg */
+    --destructive-foreground: oklch(0.980 0.010 90);
+
+    --success: oklch(0.680 0.110 155);
+    --success-foreground: oklch(0.170 0.030 278);
+    --warning: oklch(0.800 0.130 78);
+    --warning-foreground: oklch(0.200 0.040 80);
+
+    --border: oklch(0.340 0.030 278);
+    --input: oklch(0.340 0.030 278);
+    --ring: oklch(0.620 0.100 278);
+
+    --chart-1: oklch(0.640 0.175 22);
+    --chart-2: oklch(0.660 0.110 262);
+    --chart-3: oklch(0.790 0.105 84);
+    --chart-4: oklch(0.700 0.085 200);
+    --chart-5: oklch(0.620 0.075 300);
+
+    --sidebar: oklch(0.225 0.030 278);
+    --sidebar-foreground: oklch(0.920 0.012 88);
+    --sidebar-primary: oklch(0.680 0.115 275);
+    --sidebar-primary-foreground: oklch(0.170 0.030 278);
+    --sidebar-accent: oklch(0.300 0.032 278);
+    --sidebar-accent-foreground: oklch(0.930 0.012 88);
+    --sidebar-border: oklch(0.340 0.030 278);
+    --sidebar-ring: oklch(0.620 0.100 278);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
+  }
+  html {
+    @apply font-sans;
+  }
+  h1, h2, h3, .font-heading {
+    font-family: var(--font-heading);
+  }
+}
+
+@layer components {
+  /*
+   * Flag motion. Deliberately low-amplitude: a slow breathing skew on the
+   * whole field, plus shading that drifts across it. Enough to feel like
+   * cloth, not enough to distract from a form sitting next to it.
+   *
+   * Motion is opt-in via the media query, so prefers-reduced-motion (and any
+   * environment that doesn't report a preference) simply gets a still flag.
+   */
+  .flag-folds {
+    opacity: 0.55;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .flag-wave {
+      transform-origin: 0% 50%;
+      animation: flag-wave 9s ease-in-out infinite;
+    }
+
+    .flag-folds-animated {
+      animation: flag-folds 9s ease-in-out infinite;
+    }
+  }
+
+  @keyframes flag-wave {
+    0%,
+    100% {
+      transform: skewY(0deg) scaleY(1);
+    }
+    35% {
+      transform: skewY(-0.45deg) scaleY(0.995);
+    }
+    70% {
+      transform: skewY(0.5deg) scaleY(1.005);
+    }
+  }
+
+  @keyframes flag-folds {
+    0%,
+    100% {
+      opacity: 0.5;
+      transform: translateX(-1.5%);
+    }
+    50% {
+      opacity: 0.68;
+      transform: translateX(1.5%);
+    }
+  }
+
+  /*
+   * Engraved hairline used on report/record surfaces — evokes the ruled lines
+   * of a filed government form without resorting to a background image.
+   */
+  .rule-engraved {
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0 1.75rem,
+      var(--border) 1.75rem 1.8125rem
+    );
+  }
+}
