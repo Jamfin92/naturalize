@@ -1,0 +1,6 @@
+{
+  "$schema": "https://xunit.net/schema/current/xunit.runner.schema.json",
+
+  "//": "Test classes run sequentially, not in parallel. Each ApiFactory disposes with SqliteConnection.ClearAllPools(), which is PROCESS-WIDE — so one class finishing would clear another class's live connection pool mid-test. Sequential is also honest about what these are: full HTTP round-trips against a real host, not fast unit tests to fan out.",
+  "parallelizeTestCollections": false
+}
