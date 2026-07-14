@@ -7,6 +7,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{37618721-748
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Naturalization.Api", "src\Naturalization.Api\Naturalization.Api.csproj", "{28A8A7A3-1CF8-47BB-ACBD-DE5B86FC45A1}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{A4E8BFB8-4D25-4858-9C48-8B2929FBBCC8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Naturalization.Api.Tests", "tests\Naturalization.Api.Tests\Naturalization.Api.Tests.csproj", "{ECE637A0-1B86-47FA-A697-340D095FAEB1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,8 +24,13 @@ Global
 		{28A8A7A3-1CF8-47BB-ACBD-DE5B86FC45A1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{28A8A7A3-1CF8-47BB-ACBD-DE5B86FC45A1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{28A8A7A3-1CF8-47BB-ACBD-DE5B86FC45A1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ECE637A0-1B86-47FA-A697-340D095FAEB1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ECE637A0-1B86-47FA-A697-340D095FAEB1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ECE637A0-1B86-47FA-A697-340D095FAEB1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ECE637A0-1B86-47FA-A697-340D095FAEB1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{28A8A7A3-1CF8-47BB-ACBD-DE5B86FC45A1} = {37618721-7487-4E75-A69A-1AC8B1F47E87}
+		{ECE637A0-1B86-47FA-A697-340D095FAEB1} = {A4E8BFB8-4D25-4858-9C48-8B2929FBBCC8}
 	EndGlobalSection
 EndGlobal
