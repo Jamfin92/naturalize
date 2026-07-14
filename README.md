@@ -2,32 +2,41 @@
 
 An open-source records system for tracking N-400 naturalization applicants — from filing, through
 biometrics and interview, to the oath of allegiance — and for recording the decisions made along the
-way.
-
-The operator is a caseworker or clerk, not the applicant. It answers: *who is on file, where is each
-case, what evidence is in, who decided what, and when.*
+way. The operator is a caseworker or clerk, not the applicant.
 
 > **This is a reference implementation, not a government system.** It is not affiliated with USCIS or
 > any government agency, it is not legal advice, and every applicant, A-Number, receipt number and
-> decision in the seeded database is **fabricated**. Authentication is stubbed: any email signs you
-> in. Read [Before you deploy this](#before-you-deploy-this) before pointing it at real records.
+> decision in the seeded database is **fabricated**. It ships with demo officer accounts whose
+> passwords are printed below and a signing key committed to the repo — read
+> [Before you deploy this](#before-you-deploy-this) before pointing it at real records.
+
+> **This is the full-featured branch.** The default branch,
+> [`master`](https://github.com/Jamfin92/naturalize/tree/master), is deliberately narrowed to
+> *applicants + reports*. This branch (`enhancement/case-workflow`) adds the case queue, guarded
+> status transitions, approvals/decisions and evidence handling on top of the same auth, migrations,
+> soft deletes and tests. See [Scope](#scope).
 
 ## What's in it
 
 | | |
 |---|---|
 | **Frontend** | Vite 8 · React 19 · TypeScript · Tailwind v4 · shadcn/ui · React Router 7 |
-| **Backend** | ASP.NET Core 8 minimal APIs · EF Core 8 · SQLite |
+| **Backend** | ASP.NET Core 8 minimal APIs · EF Core 8 (migrations) · SQLite |
+| **Auth** | Local JWT forms auth (HS256), with a dormant Okta carve-out |
 | **Reports** | PDFsharp + MigraDoc (MIT) — three server-rendered PDFs with embedded fonts |
+| **Tests** | xUnit integration tests over the real host · Playwright end-to-end |
 | **Licence** | MIT |
 
-- **Applicants** — searchable, paginated register; personal particulars and case history.
+- **Applicants** — a searchable, paginated register. Add, edit, view, and *withdraw* (a soft delete
+  that keeps the record and its audit trail), with restore.
 - **Cases** — the N-400 lifecycle as an explicit state machine, filterable by status, with an
-  append-only audit trail.
+  append-only audit trail. Status changes go through a guarded endpoint that rejects illegal jumps.
 - **Approvals** — record an approve / deny / continue decision against a case that has completed
   interview. Writes the decision, advances the case, and appends to the audit trail atomically.
-- **Reports** — Case Record, Approvals (with per-office approval rates), and Pipeline (caseload by
-  status, plus aging).
+- **Reports** — Case Record, Approvals (per-office approval rates), and Pipeline (caseload by status,
+  plus aging), each rendered server-side as a PDF with embedded fonts.
+- **Record history** — every change to a record, and the officer who made it, taken from their bearer
+  token, never from the request body.
 
 ## Running it
 
@@ -35,7 +44,7 @@ You need **Node 20+** and the **.NET 8 SDK**.
 
 ```bash
 # 1. API — http://localhost:5099 (Swagger at /swagger)
-#    Creates and seeds a SQLite database on first run.
+#    Applies migrations and seeds a SQLite database on first run.
 dotnet run --project api/src/Naturalization.Api
 
 # 2. Frontend — http://localhost:5173
@@ -43,126 +52,160 @@ npm install
 npm run dev
 ```
 
-Sign in with any email address. The seeded database contains 40 fabricated applicants spread across
-every case status, so every screen and every report has something to show.
+Sign in with **`a.hernandez@example.gov`** / **`Naturalize!Demo1`**. The seeded database contains 40
+fabricated applicants across every case status, so every screen and every report has something to
+show.
 
-To start over, delete `api/src/Naturalization.Api/naturalization.db` and re-run.
+> **Upgrading from an older checkout?** The pre-migrations builds used `EnsureCreated`, which leaves a
+> `naturalization.db` with no migrations-history table. `MigrateAsync()` will then try to create
+> tables that already exist and fail at startup. Delete `api/src/Naturalization.Api/naturalization.db`
+> (and its `-wal` / `-shm` siblings) once, and it rebuilds cleanly. It is gitignored.
+
+## Authentication
+
+Sign-in exchanges credentials for a JWT; every endpoint except `/health` and `/api/auth/login`
+requires it. The officer identity in the token is what gets written into the audit trail against
+every case transition and decision — so it comes from the token, never from the request body. (An
+earlier build let the client name its own actor, which meant a decision could be signed with anyone's
+name.)
+
+**Demo officers** (seeded, passwords public because every applicant is fabricated):
+
+| Email | Password | Field office |
+|---|---|---|
+| `a.hernandez@example.gov` | `Naturalize!Demo1` | Boston, MA |
+| `m.whitfield@example.gov` | `Naturalize!Demo1` | Hartford, CT |
+
+**A real signing key** is required in any non-development run — startup validates it and refuses to
+boot without one. Generate one and pass it through the environment; never commit it:
+
+```bash
+export Auth__Jwt__Key="$(openssl rand -base64 48)"
+```
+
+The dev key in `appsettings.Development.json` exists only so `dotnet run` works on a fresh clone. It
+is public and every fork shares it, which is exactly why it must never reach a deployment.
+
+### The Okta carve-out
+
+The backend is wired for Okta but it is **off**. A [policy scheme](api/src/Naturalization.Api/Auth/AuthExtensions.cs)
+routes each request on its token's `iss` claim, so with Okta enabled the API validates Okta-issued
+tokens *alongside* locally-issued ones — local sign-in keeps working while you migrate. Turn it on
+with three config values:
+
+```jsonc
+"Auth": {
+  "Okta": {
+    "Enabled":   true,
+    "Authority": "https://<your-org>.okta.com/oauth2/default",
+    "Audience":  "api://naturalize"
+  }
+}
+```
+
+**Honest limit:** the *backend* path is genuinely config-only. The *frontend* still needs an OIDC
+redirect flow, which this does not build — but [`src/lib/token.ts`](src/lib/token.ts) is the single
+place the app reads its bearer token, so an OIDC flow only has to deposit one there.
 
 ## The design decisions worth arguing about
 
 ### Should the app window be resizable?
 
 This app's ancestor was a desktop tool that lived in the corner of the screen. The obvious move is to
-reproduce that: a small, persistent, always-there panel. **We didn't, and the reasoning matters more
-than the conclusion.**
+reproduce that: a small, persistent panel. **We didn't, and the reasoning matters more than the
+conclusion.** A browser tab cannot float above your other applications — it can only dock to the
+corner of its *own* page, so a "corner panel" is a small panel on an otherwise empty page, reproducing
+the *shape* of the idea while discarding the *point*. And nothing here is widget-shaped: applicant
+records, case queues and decision entry are tables and multi-field forms that a 380px panel makes
+strictly worse than a phone layout. So: fully responsive, conventional app shell, no dock — targeting
+1280px+ and degrading to tablet.
 
-**A browser tab cannot float above your other applications.** It can only dock to the corner of its
-*own page*. The desktop original's entire value was that it floated over your work while you did
-something else. In a tab, if you are looking at our page then you are by definition not doing
-anything else — so a "corner panel" is a small panel on an otherwise empty page. That reproduces the
-*shape* of the idea while discarding the *point* of it, and a great many corner-docked web apps are
-exactly this cargo cult.
-
-The second problem is the content. A corner dock earns its keep when the task is *widget-shaped*:
-short, repetitive, high-frequency, low-density — the reason flashcard drilling works in a tiny window,
-and why Duolingo owns the phone. **Nothing in this app is widget-shaped.** Applicant records, case
-queues, decision entry, evidence checklists and audit timelines are tables and multi-field forms.
-Squeezing a case queue into 380px produces something strictly worse than a phone layout.
-
-So: **fully responsive and resizable, conventional app shell, no dock.** The real target is 1280px
-and up — this is a desk tool — degrading gracefully to tablet.
-
-**The one honest way back**, recorded here in case a widget-shaped task ever appears (a "cases
-awaiting my decision" ticker is the plausible candidate): the
+The one honest way back, if a persistent widget-shaped task ever appears (a "cases awaiting my
+decision" ticker is the candidate): the
 [Document Picture-in-Picture API](https://developer.chrome.com/docs/web-platform/document-picture-in-picture)
-opens a genuine always-on-top OS-level window that renders your own DOM. It is the *only* web API
-that actually reproduces the desktop original. Chromium 116+, so roughly 70% of desktop users —
-progressive enhancement, feature-detected. The gotcha to know before starting: the PiP window is a
-separate document with no stylesheets, so you must copy `document.styleSheets` across, and you must
-test it under `vite preview` rather than `vite dev` (dev injects `<style>`, prod ships `<link>`).
+opens a genuine always-on-top OS window rendering your own DOM. It is the only web API that actually
+reproduces the desktop original.
 
-### Container queries, in exactly one place
+### Soft deletes, because an audit trail you can destroy is not one
 
-`<main>` in the app shell is a container (`@container`), and its children reflow with `@3xl:` rather
-than `3xl:`. This is not fashion: **the sidebar collapses, which changes how much room `main` has
-without the viewport changing at all.** A viewport media query is physically incapable of seeing
-that. Everything else in the app uses ordinary media queries, because everything else genuinely does
-depend on the viewport.
-
-### Why not QuestPDF
-
-QuestPDF has a nicer API than MigraDoc, and for a private product it would be the easy pick. Its
-Community licence is free only *below a revenue threshold* — a field-of-use restriction that is **not
-OSI-approved** (it fails OSD §6), that Debian and Fedora packaging would reject, and that silently
-binds every downstream fork. Your code must also *assert* `LicenseType.Community`, which is a legal
-claim your users may not be entitled to make.
-
-This project is meant to be picked up and run by nonprofits and legal-aid clinics. Handing them a
-dependency with a revenue trigger is the wrong trade. **PDFsharp + MigraDoc is MIT**: OSI-approved,
-GPL-compatible, and it imposes nothing on anyone who forks or deploys this.
-
-The cost is real but bounded — MigraDoc is a document object model (styled tables, headers, automatic
-pagination), so the ergonomics gap is a one-time ~200-line helper in
-[`Reports/ReportTheme.cs`](api/src/Naturalization.Api/Reports/ReportTheme.cs). Paid once, here,
-instead of taxing every downstream user forever. Everything sits behind
-[`IReportGenerator`](api/src/Naturalization.Api/Reports/IReportGenerator.cs), so a private fork under
-the threshold swaps in QuestPDF by replacing one file.
-
-(iText is AGPL — viral over the network, so anyone *deploying* the API would have to open-source
-their whole stack. Headless-Chromium HTML→PDF drags 150–300 MB into every container and adds an
-XSS/SSRF surface. Both rejected.)
-
-### Fonts are embedded, and that's not incidental
-
-PdfSharp has **no default font resolver on macOS or Linux** — without one, the first render throws.
-So the reports carry their own: PT Serif and PT Sans TTFs are compiled into the assembly and served
-by [`EmbeddedFontResolver`](api/src/Naturalization.Api/Reports/EmbeddedFontResolver.cs). Report output
-is therefore identical on a laptop, in CI, and in a slim container with no system fonts installed.
-
-Both families ship *static* faces, which is why they were chosen over the nicer-looking Libre
-Baskerville: Google Fonts now distributes that one as a variable font only, and PdfSharp cannot
-instance a weight axis — so every bold heading would silently render wrong in print. The web app uses
-the same two families, so screen and print are one font stack rather than two.
+Deleting an applicant used to cascade through their cases, evidence and — fatally — their entire audit
+trail. Now withdrawing an applicant **stamps and hides** the record; the row, its cases and its events
+stay in the database, hidden by a query filter and readable with `IgnoreQueryFilters()`. All four
+foreign keys are `DeleteBehavior.Restrict`, so an accidental *hard* delete throws instead of erasing
+the record. An A-Number is never released — re-adding a withdrawn one returns an actionable **409**,
+not the raw 500 the unfiltered unique index would otherwise throw. The invariants are written into
+[`NaturalizationDbContext`](api/src/Naturalization.Api/Data/NaturalizationDbContext.cs).
 
 ### The state machine has one home
 
 Legal case transitions are defined once, in
-[`Services/StatusTransitions.cs`](api/src/Naturalization.Api/Services/StatusTransitions.cs). Every
-case read returns its `allowedTransitions`, and the UI renders *exactly those* as buttons. The
-frontend does not know the rules and cannot drift from them, and there is deliberately no endpoint
-that sets `Status` to an arbitrary value — every transition is validated and writes an audit event.
+[`Services/StatusTransitions.cs`](api/src/Naturalization.Api/Services/StatusTransitions.cs). Every case
+read returns its `allowedTransitions`, and the UI renders *exactly those* as buttons — so the frontend
+cannot drift from the rules, and there is deliberately no endpoint that sets `Status` to an arbitrary
+value.
+
+### Reports are fetched with the token, not linked
+
+The download buttons used to be plain `<a href>` links, but a browser *navigation* cannot carry an
+`Authorization` header — so once reports went behind auth, every link would have opened a blank tab of
+401 JSON. They now fetch the PDF with the bearer token and save the blob; CORS exposes
+`Content-Disposition` so the server-chosen filename survives.
+
+### Why not QuestPDF
+
+QuestPDF has a nicer API, but its Community licence is free only *below a revenue threshold* — a
+field-of-use restriction that is **not OSI-approved** and silently binds every downstream fork. This
+is meant for nonprofits and legal-aid clinics, so **PDFsharp + MigraDoc (MIT)** it is, behind
+[`IReportGenerator`](api/src/Naturalization.Api/Reports/IReportGenerator.cs) so a private fork can swap
+QuestPDF back in by replacing one file. (iText is AGPL; headless-Chromium HTML→PDF is 150–300 MB plus
+an XSS/SSRF surface. Both rejected.)
+
+### Fonts are embedded, and that's not incidental
+
+PdfSharp has **no default font resolver on macOS or Linux** — without one, the first render throws. So
+PT Serif and PT Sans are compiled into the assembly and served by
+[`EmbeddedFontResolver`](api/src/Naturalization.Api/Reports/EmbeddedFontResolver.cs), and report output
+is identical on a laptop, in CI, and in a container with no system fonts. Both ship *static* faces
+(PdfSharp cannot instance a variable-font weight axis), and the web app uses the same two.
 
 ### The theme
 
 "Parchment & Old Glory". The flag's own colours, converted to OKLCH, *are* the semantic tokens: Old
-Glory Blue is `--primary`, Old Glory Red is `--destructive`. Two hues plus a brass accent, over warm
-parchment neutrals (hue ~85) rather than grey. Those warm neutrals are most of what keeps it from
-reading as default shadcn slate.
+Glory Blue is `--primary`, Old Glory Red is `--destructive`, over warm parchment neutrals. The flag is
+built to **Executive Order 10834** geometry — 1:1.9, union 7/13 hoist × 0.76 fly, 50 stars from the
+9-row 6/5 grid — and never changes colour in dark mode.
 
-The flag itself is built to **Executive Order 10834** geometry — 1:1.9 proportions, union 7/13 hoist
-× 0.76 fly, 50 stars generated from the 9-row 6/5 grid — not eyeballed. It never changes colour in
-dark mode: `--flag-red`, `--flag-white` and `--flag-blue` are literals, deliberately outside the
-theme.
+## Scope
+
+This branch is the full case-management app. The default branch,
+[`master`](https://github.com/Jamfin92/naturalize/tree/master), is narrowed to *applicants + reports*
+— the case queue, transitions, approvals and evidence screens and their endpoints are removed there,
+though the underlying domain stays so the reports still work. Both branches share the same auth,
+migrations, soft deletes and test suites, so this branch remains mergeable into `master`.
 
 ## API
 
-Swagger UI at `http://localhost:5099/swagger`.
+Swagger UI at `http://localhost:5099/swagger`. Everything except `/health` and `/api/auth/login`
+requires a bearer token.
 
 ```
-GET    /api/applicants?q=&page=&pageSize=      POST   /api/applicants
-GET    /api/applicants/{id}                    PUT    /api/applicants/{id}
-DELETE /api/applicants/{id}                    GET    /api/applicants/{id}/cases
+POST   /api/auth/login                          GET    /api/auth/me
 
-GET    /api/cases?q=&status=&page=&pageSize=   POST   /api/cases
-GET    /api/cases/{id}                         DELETE /api/cases/{id}
+GET    /api/applicants?q=&page=&pageSize=       POST   /api/applicants
+GET    /api/applicants/{id}                     PUT    /api/applicants/{id}
+DELETE /api/applicants/{id}   <- soft delete    POST   /api/applicants/{id}/restore
+GET    /api/applicants/{id}/cases               GET    /api/applicants/{id}/history
+
+GET    /api/cases?q=&status=&page=&pageSize=    POST   /api/cases
+GET    /api/cases/{id}                          DELETE /api/cases/{id}   <- soft delete
 GET    /api/cases/{id}/events
-POST   /api/cases/{id}/status                  <- guarded transition; rejects illegal jumps
+POST   /api/cases/{id}/status                   <- guarded transition; rejects illegal jumps
 
-GET    /api/decisions?from=&to=&fieldOffice=   POST   /api/decisions
-GET    /api/decisions/{id}                     DELETE /api/decisions/{id}
+GET    /api/decisions?from=&to=&fieldOffice=    POST   /api/decisions
+GET    /api/decisions/{id}
 
-GET    /api/documents?caseId=                  POST   /api/documents
-PUT    /api/documents/{id}/status              DELETE /api/documents/{id}
+GET    /api/documents?caseId=                   POST   /api/documents
+PUT    /api/documents/{id}/status
 
 GET    /api/metrics
 GET    /api/reports/case/{id}.pdf
@@ -170,37 +213,40 @@ GET    /api/reports/approvals.pdf?from=&to=&fieldOffice=
 GET    /api/reports/pipeline.pdf
 ```
 
+## Tests
+
+```bash
+dotnet test api/Naturalization.sln   # xUnit integration tests over a real WebApplicationFactory host
+npx playwright test                  # end-to-end: a real browser -> SPA -> API -> SQLite
+```
+
 ## Before you deploy this
 
-It is a demo. To hold real records it needs, at minimum:
+It is a reference implementation. To hold real records it still needs, at minimum:
 
-- **Real authentication and authorisation.** [`src/lib/auth.tsx`](src/lib/auth.tsx) is a stub that
-  accepts any email and verifies nothing. There are no roles: anyone signed in can decide any case.
-- **Migrations.** Startup calls `EnsureCreated()`, which cannot evolve a schema. Switch to
-  `dotnet ef migrations` before there is data you care about.
+- **A real signing key and a real identity provider.** Set `Auth__Jwt__Key` from a secret store, and
+  either replace the seeded officer accounts or turn on the Okta path (and build the frontend OIDC
+  flow it needs). There are **no refresh tokens** and **no roles** — anyone signed in can decide any
+  case — and a deactivated account keeps working until its token expires.
 - **Real document storage.** `/api/documents` registers *metadata only* and never accepts file bytes.
-  That is deliberate — accepting immigration evidence means virus scanning, content-type sniffing,
-  encryption at rest, a retention policy and access logging, and a deployer must make those choices
-  themselves.
-- **Soft deletes.** `DELETE /api/applicants/{id}` cascades and takes the audit trail with it. An
-  audit trail you can destroy is not an audit trail.
-- **CORS.** Currently pinned to the Vite dev server. See
+  Accepting immigration evidence means virus scanning, content-type sniffing, encryption at rest, a
+  retention policy and access logging — choices a deployer must make.
+- **Your own CORS origins.** Currently pinned to the Vite dev server; see
   [`Program.cs`](api/src/Naturalization.Api/Program.cs).
-- **A privacy and retention review.** This models data — country of origin, immigration status,
-  denial reasons — whose exposure can genuinely hurt people.
+- **A privacy and retention review.** This models country of origin, immigration status and denial
+  reasons — data whose exposure can genuinely hurt people.
 
 ### Known limitations
 
-- A `Decision` is unique per case, so a *Continued* decision (adjudication deferred pending further
-  evidence) leaves the case at `InterviewCompleted` but blocks it from ever being decided again.
-  Modelling decisions as an ordered history rather than a single row would fix it.
-- No automated tests yet.
+- **No roles.** Authorisation is out of scope; a half-built role system reads as a real one.
+- A `Decision` is unique per case, so a *Continued* decision leaves the case at `InterviewCompleted`
+  but blocks it from ever being decided again. Modelling decisions as an ordered history would fix it.
+- **SQLite migrations** rebuild a table to drop or alter a column — review any generated migration,
+  because anything not in the EF model (hand-added triggers, indexes) is lost in the rebuild.
 - `medianDaysToDecision` counts filing→decision, which flatters the number when a case sat waiting on
   the applicant rather than on the office.
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE).
-
-Bundled PT Serif and PT Sans are SIL OFL; every dependency is permissively licensed. See
-[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+MIT — see [LICENSE](LICENSE). Bundled PT Serif and PT Sans are SIL OFL; every dependency is
+permissively licensed. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
