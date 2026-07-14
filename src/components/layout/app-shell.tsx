@@ -93,7 +93,13 @@ export function AppShell() {
                 }
               >
                 <Icon className="size-4 shrink-0" />
-                {!collapsed && <span>{label}</span>}
+                {/*
+                 * Collapsed, the label is hidden but must still be readable: an
+                 * icon-only link has no accessible name, and a tooltip is not
+                 * one — it only fires on hover/focus and screen readers may
+                 * never announce it. Keep the text in the tree, visually hidden.
+                 */}
+                <span className={cn(collapsed && 'sr-only')}>{label}</span>
               </NavLink>
             )
 

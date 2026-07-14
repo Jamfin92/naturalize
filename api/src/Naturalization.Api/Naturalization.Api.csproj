@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Naturalization.Api</RootNamespace>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.28" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.11" />
+
+    <!-- MIT-licensed. See Reports/IReportGenerator.cs for why not QuestPDF. -->
+    <PackageReference Include="PDFsharp-MigraDoc" Version="6.2.4" />
+
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      PT Serif / PT Sans TTFs, compiled into the assembly and served by
+      EmbeddedFontResolver. PdfSharp has no default font resolver on macOS or
+      Linux, so without these the first PDF render throws. Embedding them also
+      means report output is identical on a laptop, in CI, and in a container
+      with no system fonts installed. Both families are SIL OFL (see Reports/Fonts/OFL.txt).
+    -->
+    <EmbeddedResource Include="Reports/Fonts/*.ttf" />
+    <None Include="Reports/Fonts/OFL.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

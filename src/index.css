@@ -1,9 +1,17 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/source-sans-3";
-@import "@fontsource/libre-baskerville/400.css";
-@import "@fontsource/libre-baskerville/700.css";
+/*
+ * PT Serif + PT Sans. Chosen because they still ship STATIC faces: the PDF
+ * reports embed these exact TTFs, and PdfSharp cannot instance a weight axis
+ * out of a variable font, so a variable-only family would render bold headings
+ * wrong in print. Screen and print therefore use one font stack, not two.
+ * Both are SIL OFL — redistribution and PDF embedding are permitted.
+ */
+@import "@fontsource/pt-sans/400.css";
+@import "@fontsource/pt-sans/700.css";
+@import "@fontsource/pt-serif/400.css";
+@import "@fontsource/pt-serif/700.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -17,8 +25,8 @@
  */
 
 @theme inline {
-    --font-heading: 'Libre Baskerville', Georgia, serif;
-    --font-sans: 'Source Sans 3 Variable', ui-sans-serif, system-ui, sans-serif;
+    --font-heading: 'PT Serif', Georgia, serif;
+    --font-sans: 'PT Sans', ui-sans-serif, system-ui, sans-serif;
     --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
 
     --color-sidebar-ring: var(--sidebar-ring);
