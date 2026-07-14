@@ -1,6 +1,8 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Http.HttpResults;
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
+using Naturalization.Api.Auth;
 using Naturalization.Api.Data;
 using Naturalization.Api.Domain;
 using Naturalization.Api.Dtos;
@@ -11,7 +13,9 @@ public static class DocumentEndpoints
 {
     public static void MapDocuments(this IEndpointRouteBuilder app)
     {
-        var g = app.MapGroup("/api/documents").WithTags("Documents");
+        var g = app.MapGroup("/api/documents")
+            .WithTags("Documents")
+            .RequireAuthorization();
 
         g.MapGet("/", async (NaturalizationDbContext db, int? caseId) =>
         {
@@ -44,7 +48,7 @@ public static class DocumentEndpoints
          * of which a real deployer must decide for themselves. See README.
          */
         g.MapPost("/", async Task<Results<Created<DocumentDto>, ValidationProblem>> (
-            NaturalizationDbContext db, DocumentInput input) =>
+            NaturalizationDbContext db, ClaimsPrincipal user, DocumentInput input) =>
         {
             var errors = new Dictionary<string, string[]>();
 
@@ -85,7 +89,7 @@ public static class DocumentEndpoints
                 CaseId = input.CaseId,
                 EventType = "Evidence filed",
                 OccurredAt = DateTime.UtcNow,
-                Actor = "System",
+                Actor = user.OfficerName(),
                 Notes = $"{input.DocumentType} ({input.FileName}) registered."
             });
 
@@ -114,15 +118,12 @@ public static class DocumentEndpoints
         })
         .WithName("SetDocumentStatus");
 
-        g.MapDelete("/{id:int}", async Task<Results<NoContent, NotFound>> (NaturalizationDbContext db, int id) =>
-        {
-            var d = await db.Documents.FirstOrDefaultAsync(x => x.Id == id);
-            if (d is null) return TypedResults.NotFound();
-
-            db.Documents.Remove(d);
-            await db.SaveChangesAsync();
-            return TypedResults.NoContent();
-        })
-        .WithName("DeleteDocument");
+        /*
+         * No DELETE. It hard-deleted the evidence row while leaving the "Evidence
+         * filed" event in the case timeline pointing at nothing — a trail that says
+         * a document was filed, and no document. Rejecting a piece of evidence is
+         * what the Rejected status is for; erasing the fact that it was ever filed
+         * is not a feature.
+         */
     }
 }

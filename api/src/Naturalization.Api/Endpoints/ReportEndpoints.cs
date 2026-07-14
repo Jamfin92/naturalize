@@ -7,13 +7,24 @@ public static class ReportEndpoints
 {
     public static void MapReports(this IEndpointRouteBuilder app)
     {
-        var g = app.MapGroup("/api/reports").WithTags("Reports");
+        var g = app.MapGroup("/api/reports")
+            .WithTags("Reports")
+            .RequireAuthorization();
 
         /*
-         * The `.pdf` suffix in the route is deliberate. It means the browser can
-         * be pointed straight at the URL with a plain <a href> — the extension,
-         * the content type and Content-Disposition all agree, so the file lands
-         * in Downloads with a sensible name and no JS blob juggling.
+         * These are now behind auth, which changed how the client fetches them.
+         *
+         * They used to be plain <a href> links: the browser navigated to the URL
+         * and Content-Disposition did the rest. But a browser NAVIGATION cannot
+         * carry an Authorization header, so the moment this group required a token
+         * every download button would have opened a blank tab containing 401 JSON.
+         * The SPA now fetches them with the bearer token and saves the blob (see
+         * src/lib/api.ts). CORS must expose Content-Disposition for the filename
+         * below to survive the trip — see Program.cs.
+         *
+         * The alternative — accepting ?access_token= on these routes — would have
+         * kept the <a href> and leaked a full-lifetime bearer token into browser
+         * history, the Referer header, and every proxy log in between.
          */
 
         g.MapGet("/case/{caseId:int}.pdf", async Task<IResult> (
@@ -71,6 +82,7 @@ public static class ReportEndpoints
         // pipeline PDF so the screen and the print-out cannot disagree.
         app.MapGet("/api/metrics", async (CaseMetrics metrics) => TypedResults.Ok(await metrics.ComputeAsync()))
             .WithTags("Reports")
-            .WithName("GetMetrics");
+            .WithName("GetMetrics")
+            .RequireAuthorization();
     }
 }

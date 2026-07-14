@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Naturalization.Api.Domain;
 
@@ -12,10 +13,6 @@ namespace Naturalization.Api.Data;
 /// </summary>
 public static class DbInitializer
 {
-    // Fixed seed: the demo data is identical on every clone, which makes
-    // screenshots, tests and bug reports reproducible.
-    private static readonly Random Rng = new(20260714);
-
     /*
      * Name, country and nationality are kept together in one tuple rather than
      * in parallel arrays. Parallel arrays of different lengths wrap at
@@ -86,9 +83,67 @@ public static class DbInitializer
         "Travel history affidavit"
     ];
 
-    public static async Task SeedAsync(NaturalizationDbContext db)
+    /// <summary>
+    /// The demo officers. Infrastructure, not fixtures: a database with no
+    /// officer in it is an API that nobody can log into, so this runs even when
+    /// the demo caseload is switched off.
+    ///
+    /// These passwords are public, in a public repository, on purpose — this is a
+    /// demo whose every applicant is fabricated. A real deployment provisions its
+    /// officers from its own identity provider (see the Okta carve-out) and never
+    /// runs this. The README says so in more words.
+    /// </summary>
+    public const string DemoPassword = "Naturalize!Demo1";
+
+    private static readonly (string Email, string Name, string Office)[] Officers =
+    [
+        ("a.hernandez@example.gov", "A. Hernandez", "Boston, MA"),
+        ("m.whitfield@example.gov", "M. Whitfield", "Hartford, CT"),
+    ];
+
+    public static async Task SeedOfficersAsync(
+        NaturalizationDbContext db, IPasswordHasher<OfficerAccount> hasher)
+    {
+        if (await db.Officers.AnyAsync()) return;
+
+        foreach (var (email, name, office) in Officers)
+        {
+            var officer = new OfficerAccount
+            {
+                Email = email,
+                FullName = name,
+                FieldOffice = office,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+            };
+
+            // Hashed, never stored in the clear — even for a demo account whose
+            // password is printed in the README. The habit is the point.
+            officer.PasswordHash = hasher.HashPassword(officer, DemoPassword);
+            db.Officers.Add(officer);
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    public static async Task SeedDemoCaseloadAsync(NaturalizationDbContext db)
     {
         if (await db.Applicants.AnyAsync()) return;
+
+        /*
+         * The RNG is LOCAL, and that is not a style preference.
+         *
+         * It used to be a `static readonly Random`, which is neither thread-safe
+         * nor reset between calls. Harmless with one process seeding one database
+         * once — but the integration tests boot several hosts in a single process,
+         * so the "deterministic" fixture would quietly differ between test classes,
+         * and two hosts seeding at once can corrupt Random's internal state badly
+         * enough to emit duplicate A-Numbers and trip the unique index. A suite
+         * that fails once a fortnight is worse than one that fails every time.
+         *
+         * Fixed seed, so the demo data is still identical on every clone.
+         */
+        var rng = new Random(20260714);
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
@@ -115,22 +170,26 @@ public static class DbInitializer
             var place = Places[i % Places.Length];
             var name = person.Name;
 
-            var lprYears = Rng.Next(5, 12);
+            var lprYears = rng.Next(5, 12);
             var applicant = new Applicant
             {
-                AlienNumber = $"A{100_000_000 + Rng.Next(1, 899_999_999)}",
+                // Derived from the index rather than drawn at random. A random
+                // A-Number can collide with an earlier one and trip the unique
+                // index; a stride does not, and it also makes the seeded data
+                // assertable from a test.
+                AlienNumber = $"A{100_000_000 + i * 7_919_237}",
                 FullName = name,
-                DateOfBirth = today.AddDays(-Rng.Next(23 * 365, 62 * 365)),
+                DateOfBirth = today.AddDays(-rng.Next(23 * 365, 62 * 365)),
                 CountryOfBirth = person.Country,
                 Nationality = person.Nationality,
-                AddressLine = $"{Rng.Next(4, 1990)} {new[] { "Elm", "Maple", "Beacon", "Washington", "Liberty", "Concord" }[Rng.Next(6)]} St",
+                AddressLine = $"{rng.Next(4, 1990)} {new[] { "Elm", "Maple", "Beacon", "Washington", "Liberty", "Concord" }[rng.Next(6)]} St",
                 City = place.City,
                 State = place.State,
-                PostalCode = $"0{Rng.Next(1000, 9999)}",
+                PostalCode = $"0{rng.Next(1000, 9999)}",
                 Email = $"{name.Split(' ')[0].ToLowerInvariant()}.{name.Split(' ')[^1].ToLowerInvariant()}@example.com",
-                Phone = $"({Rng.Next(200, 989)}) {Rng.Next(200, 999)}-{Rng.Next(1000, 9999)}",
-                LawfulPermanentResidentSince = today.AddDays(-lprYears * 365 - Rng.Next(0, 300)),
-                CreatedAt = DateTime.UtcNow.AddDays(-Rng.Next(400, 800))
+                Phone = $"({rng.Next(200, 989)}) {rng.Next(200, 999)}-{rng.Next(1000, 9999)}",
+                LawfulPermanentResidentSince = today.AddDays(-lprYears * 365 - rng.Next(0, 300)),
+                CreatedAt = DateTime.UtcNow.AddDays(-rng.Next(400, 800))
             };
             db.Applicants.Add(applicant);
 
@@ -144,12 +203,12 @@ public static class DbInitializer
              * So the age band is derived from the status.
              */
             var (minAge, maxAge) = AgeBandDays(status);
-            var filedOn = today.AddDays(-Rng.Next(minAge, maxAge));
+            var filedOn = today.AddDays(-rng.Next(minAge, maxAge));
 
             var c = new NaturalizationCase
             {
                 Applicant = applicant,
-                ReceiptNumber = $"NBC{2024 + (i % 2)}{Rng.Next(100_000, 999_999)}",
+                ReceiptNumber = $"NBC{2024 + (i % 2)}{100_000 + i * 7_919:D6}",   // stride, not random: cannot collide
                 FiledOn = filedOn,
                 FieldOffice = place.Office,
                 Status = status
@@ -163,28 +222,28 @@ public static class DbInitializer
             var reached = ReachedMilestones(status);
 
             if (status == CaseStatus.BiometricsScheduled)
-                c.BiometricsOn = today.AddDays(Rng.Next(5, 30));
+                c.BiometricsOn = today.AddDays(rng.Next(5, 30));
             else if (reached.biometrics)
-                c.BiometricsOn = PastBetween(filedOn.AddDays(25), filedOn.AddDays(70), today);
+                c.BiometricsOn = PastBetween(rng, filedOn.AddDays(25), filedOn.AddDays(70), today);
 
             if (status == CaseStatus.InterviewScheduled)
-                c.InterviewOn = today.AddDays(Rng.Next(5, 40));
+                c.InterviewOn = today.AddDays(rng.Next(5, 40));
             else if (status is CaseStatus.Approved or CaseStatus.Denied)
                 // Freshly adjudicated: interview in the last few weeks, so the
                 // decision that follows it lands inside the current month and the
                 // dashboard's "this month" tiles are not permanently zero.
-                c.InterviewOn = PastBetween(today.AddDays(-45), today.AddDays(-8), today);
+                c.InterviewOn = PastBetween(rng, today.AddDays(-45), today.AddDays(-8), today);
             else if (reached.interview)
-                c.InterviewOn = PastBetween(filedOn.AddDays(120), filedOn.AddDays(300), today);
+                c.InterviewOn = PastBetween(rng, filedOn.AddDays(120), filedOn.AddDays(300), today);
 
             if (status == CaseStatus.OathScheduled)
-                c.OathOn = today.AddDays(Rng.Next(5, 45));
+                c.OathOn = today.AddDays(rng.Next(5, 45));
             else if (reached.oath)
-                c.OathOn = PastBetween(
+                c.OathOn = PastBetween(rng,
                     (c.InterviewOn ?? filedOn).AddDays(40), (c.InterviewOn ?? filedOn).AddDays(120), today);
 
             // Evidence.
-            var docCount = Rng.Next(2, 5);
+            var docCount = rng.Next(2, 5);
             for (var d = 0; d < docCount; d++)
             {
                 var type = DocTypes[(i + d) % DocTypes.Length];
@@ -193,14 +252,14 @@ public static class DbInitializer
                     DocumentType = type,
                     FileName = $"{type.ToLowerInvariant().Replace(' ', '-').Replace("(", "").Replace(")", "")}.pdf",
                     ContentType = "application/pdf",
-                    SizeBytes = Rng.Next(80_000, 4_500_000),
+                    SizeBytes = rng.Next(80_000, 4_500_000),
                     Sha256 = Convert.ToHexString(
                         System.Security.Cryptography.SHA256.HashData(
                             System.Text.Encoding.UTF8.GetBytes($"{c.ReceiptNumber}:{type}"))).ToLowerInvariant(),
                     Status = status >= CaseStatus.InterviewCompleted
                         ? DocumentStatus.Verified
-                        : (DocumentStatus)Rng.Next(0, 2),
-                    UploadedAt = filedOn.ToDateTime(TimeOnly.MinValue).AddDays(Rng.Next(1, 30))
+                        : (DocumentStatus)rng.Next(0, 2),
+                    UploadedAt = filedOn.ToDateTime(TimeOnly.MinValue).AddDays(rng.Next(1, 30))
                 });
             }
 
@@ -217,7 +276,7 @@ public static class DbInitializer
             if (reached.biometrics)
             {
                 AddEvent(c, "Biometrics scheduled",
-                    PastBetween(c.BiometricsOn!.Value.AddDays(-35), c.BiometricsOn!.Value.AddDays(-10), today),
+                    PastBetween(rng, c.BiometricsOn!.Value.AddDays(-35), c.BiometricsOn!.Value.AddDays(-10), today),
                     "Scheduling", "Appointment notice mailed.");
 
                 if (status != CaseStatus.BiometricsScheduled)
@@ -228,7 +287,7 @@ public static class DbInitializer
             if (reached.interview)
             {
                 AddEvent(c, "Interview scheduled",
-                    PastBetween(c.InterviewOn!.Value.AddDays(-45), c.InterviewOn!.Value.AddDays(-15), today),
+                    PastBetween(rng, c.InterviewOn!.Value.AddDays(-45), c.InterviewOn!.Value.AddDays(-15), today),
                     "Scheduling", "Interview notice mailed.");
 
                 if (status != CaseStatus.InterviewScheduled)
@@ -240,7 +299,7 @@ public static class DbInitializer
             // A decision, like any completed act, cannot be dated in the future.
             if (status is CaseStatus.Approved or CaseStatus.OathScheduled or CaseStatus.Naturalized)
             {
-                var decidedOn = PastBetween(
+                var decidedOn = PastBetween(rng,
                     c.InterviewOn!.Value.AddDays(3), c.InterviewOn!.Value.AddDays(25), today);
                 c.Decision = new Decision
                 {
@@ -254,7 +313,7 @@ public static class DbInitializer
             }
             else if (status == CaseStatus.Denied)
             {
-                var decidedOn = PastBetween(
+                var decidedOn = PastBetween(rng,
                     c.InterviewOn!.Value.AddDays(5), c.InterviewOn!.Value.AddDays(30), today);
                 c.Decision = new Decision
                 {
@@ -271,7 +330,7 @@ public static class DbInitializer
             if (reached.oath)
             {
                 AddEvent(c, "Oath ceremony scheduled",
-                    PastBetween(c.OathOn!.Value.AddDays(-40), c.OathOn!.Value.AddDays(-12), today),
+                    PastBetween(rng, c.OathOn!.Value.AddDays(-40), c.OathOn!.Value.AddDays(-12), today),
                     "Scheduling", "Form N-445 mailed.");
 
                 if (status == CaseStatus.Naturalized)
@@ -280,7 +339,7 @@ public static class DbInitializer
             }
 
             if (status == CaseStatus.Withdrawn)
-                AddEvent(c, "Application withdrawn", filedOn.AddDays(Rng.Next(30, 120)), "Intake clerk",
+                AddEvent(c, "Application withdrawn", filedOn.AddDays(rng.Next(30, 120)), "Intake clerk",
                     "Withdrawal requested in writing by applicant.");
 
             db.Cases.Add(c);
@@ -309,13 +368,13 @@ public static class DbInitializer
     };
 
     /// <summary>Pick a date in [earliest, latest], never later than <paramref name="today"/>.</summary>
-    private static DateOnly PastBetween(DateOnly earliest, DateOnly latest, DateOnly today)
+    private static DateOnly PastBetween(Random rng, DateOnly earliest, DateOnly latest, DateOnly today)
     {
         if (latest > today) latest = today;
         if (earliest > latest) earliest = latest;
 
         var span = latest.DayNumber - earliest.DayNumber;
-        return span <= 0 ? earliest : earliest.AddDays(Rng.Next(0, span + 1));
+        return span <= 0 ? earliest : earliest.AddDays(rng.Next(0, span + 1));
     }
 
     private static (bool biometrics, bool interview, bool oath) ReachedMilestones(CaseStatus s) => s switch
