@@ -1,5 +1,30 @@
 /** Mirrors the C# domain in api/src/Naturalization.Api/Domain. Keep in sync. */
 
+/** The signed-in caseworker, as resolved by the API from the bearer token. */
+export interface Officer {
+  id: number
+  name: string
+  email: string
+  fieldOffice: string
+}
+
+/**
+ * A row in the system audit log: who touched this record, and how.
+ *
+ * Distinct from CaseEvent (a case's own lifecycle). This one has no foreign key
+ * and is never deleted, so it survives the record it describes — which is what
+ * makes a withdrawn applicant's history still readable.
+ */
+export interface AuditEvent {
+  id: number
+  entityType: string
+  entityId: number
+  action: 'Created' | 'Updated' | 'Deleted' | 'Restored' | string
+  actor: string
+  occurredAt: string
+  summary: string
+}
+
 export const CASE_STATUSES = [
   'Received',
   'BiometricsScheduled',

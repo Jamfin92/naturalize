@@ -33,12 +33,10 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { api } from '@/lib/api'
-import { useAuth } from '@/lib/auth'
 import { useAsync } from '@/lib/use-async'
 import { DECISION_OUTCOMES, type DecisionOutcome } from '@/lib/types'
 
 export function ApprovalsPage() {
-  const { officer } = useAuth()
   const decisions = useAsync(() => api.decisions.list(), [])
 
   // Cases that have completed interview and are therefore ripe for a decision.
@@ -55,10 +53,11 @@ export function ApprovalsPage() {
     if (!caseId) return
     setBusy(true)
     try {
+      // No `decidedBy`: the adjudicating officer is taken from the bearer token,
+      // so a decision cannot be signed with somebody else's name.
       await api.decisions.create({
         caseId,
         outcome,
-        decidedBy: officer?.name ?? 'Unknown officer',
         rationale,
         denialReasonCode: outcome === 'Denied' ? denialCode : undefined,
       })

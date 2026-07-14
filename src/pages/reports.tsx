@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Download, FileBarChart, FileSpreadsheet, FileText } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { PageHeader } from '@/components/page'
 import { Button } from '@/components/ui/button'
@@ -9,23 +10,42 @@ import { Label } from '@/components/ui/label'
 import { api } from '@/lib/api'
 
 /*
- * Reports are plain <a href> downloads rather than fetch + blob. The API sets
- * Content-Disposition: attachment, so the browser streams the PDF straight to
- * disk — no reason to buffer megabytes through JS to achieve the same thing.
+ * These were <a href> links until the reports moved behind authentication.
+ *
+ * A browser navigation cannot carry an Authorization header, so an <a href> to a
+ * protected endpoint opens a blank tab containing 401 JSON — and no test catches
+ * that, because the request never goes through the API client at all. The PDF is
+ * now fetched with the bearer token and saved from a blob; see `download()` in
+ * src/lib/api.ts.
  */
 function ReportCard({
   icon: Icon,
   title,
   description,
-  href,
+  onDownload,
+  disabled,
   children,
 }: {
   icon: React.ElementType
   title: string
   description: string
-  href: string
+  onDownload: () => Promise<void>
+  disabled?: boolean
   children?: React.ReactNode
 }) {
+  const [busy, setBusy] = useState(false)
+
+  const handleClick = async () => {
+    setBusy(true)
+    try {
+      await onDownload()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Could not generate the report.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <Card className="flex flex-col">
       <CardContent className="flex flex-1 flex-col gap-4 p-5">
@@ -42,11 +62,20 @@ function ReportCard({
         {children}
 
         <div className="mt-auto pt-1">
-          <Button asChild className="w-full">
-            <a href={href} target="_blank" rel="noreferrer">
-              <Download className="size-4" />
-              Download PDF
-            </a>
+          {/*
+           * The accessible name names the report. Three buttons all announcing
+           * "Download PDF" tells a screen-reader user nothing about which one they
+           * are on — the visible label leans on the heading above it, which is
+           * context the button itself does not carry.
+           */}
+          <Button
+            className="w-full"
+            onClick={handleClick}
+            disabled={busy || disabled}
+            aria-label={`Download ${title}`}
+          >
+            <Download className="size-4" />
+            {busy ? 'Generating…' : 'Download PDF'}
           </Button>
         </div>
       </CardContent>
@@ -75,7 +104,7 @@ export function ReportsPage() {
           icon={FileBarChart}
           title="Approvals report"
           description="Every decision in a date range, with approve/deny counts broken out by field office."
-          href={api.reports.approvalsUrl({ from, to, fieldOffice: office || undefined })}
+          onDownload={() => api.reports.approvals({ from, to, fieldOffice: office || undefined })}
         >
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -113,14 +142,17 @@ export function ReportsPage() {
           icon={FileSpreadsheet}
           title="Pipeline report"
           description="Current caseload by status, with case aging and the oldest pending matters flagged."
-          href={api.reports.pipelineUrl()}
+          onDownload={() => api.reports.pipeline()}
         />
 
         <ReportCard
           icon={FileText}
           title="Case record"
           description="The complete file for a single case: applicant particulars, timeline, evidence, and decision."
-          href={caseId ? api.reports.caseRecordUrl(Number(caseId)) : '#'}
+          onDownload={() => api.reports.caseRecord(Number(caseId))}
+          // Previously this rendered href="#" when blank, so clicking it opened a
+          // blank tab. Disable it instead of pretending it's a link.
+          disabled={!caseId}
         >
           <div className="space-y-1.5">
             <Label htmlFor="caseId" className="text-xs">
@@ -135,7 +167,7 @@ export function ReportsPage() {
               placeholder="e.g. 1"
             />
             <p className="text-muted-foreground text-xs">
-              Or download it directly from any case's detail page.
+              Case IDs are listed on each applicant's record.
             </p>
           </div>
         </ReportCard>

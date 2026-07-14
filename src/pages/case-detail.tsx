@@ -10,7 +10,6 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { api } from '@/lib/api'
-import { useAuth } from '@/lib/auth'
 import { useAsync } from '@/lib/use-async'
 import { STATUS_LABELS, TERMINAL_STATUSES, type DocumentStatus } from '@/lib/types'
 
@@ -35,7 +34,6 @@ function formatBytes(bytes: number): string {
 export function CaseDetailPage() {
   const { id } = useParams<{ id: string }>()
   const caseId = Number(id)
-  const { officer } = useAuth()
   const [busy, setBusy] = useState(false)
 
   const { data, error, loading, reload } = useAsync(() => api.cases.get(caseId), [caseId])
@@ -46,10 +44,9 @@ export function CaseDetailPage() {
   const transition = async (status: (typeof data.allowedTransitions)[number]) => {
     setBusy(true)
     try {
-      await api.cases.transition(caseId, {
-        status,
-        actor: officer?.name ?? 'Unknown officer',
-      })
+      // No `actor`: the API reads it from the bearer token, so the timeline
+      // cannot be signed with a name the client picked.
+      await api.cases.transition(caseId, { status })
       toast.success(`Case moved to “${STATUS_LABELS[status]}”.`)
       reload()
     } catch (e) {
@@ -66,11 +63,19 @@ export function CaseDetailPage() {
         description={`${data.receiptNumber} · filed ${new Date(data.filedOn).toLocaleDateString()} · ${data.fieldOffice}`}
         actions={
           <>
-            <Button variant="outline" size="sm" asChild>
-              <a href={api.reports.caseRecordUrl(caseId)} target="_blank" rel="noreferrer">
-                <Download className="size-4" />
-                Case record (PDF)
-              </a>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                api.reports
+                  .caseRecord(caseId)
+                  .catch((e: unknown) =>
+                    toast.error(e instanceof Error ? e.message : 'Could not generate the PDF.'),
+                  )
+              }
+            >
+              <Download className="size-4" />
+              Case record (PDF)
             </Button>
             <Button variant="outline" size="sm" asChild>
               <Link to="/cases">
