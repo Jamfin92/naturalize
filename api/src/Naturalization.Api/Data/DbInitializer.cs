@@ -1,0 +1,360 @@
+using Microsoft.EntityFrameworkCore;
+using Naturalization.Api.Domain;
+
+namespace Naturalization.Api.Data;
+
+/// <summary>
+/// Seeds a fabricated caseload so every screen and report has something real to
+/// render on a fresh clone.
+///
+/// Every name, A-Number, receipt number and address below is invented. None of
+/// it corresponds to a real person or a real filing.
+/// </summary>
+public static class DbInitializer
+{
+    // Fixed seed: the demo data is identical on every clone, which makes
+    // screenshots, tests and bug reports reproducible.
+    private static readonly Random Rng = new(20260714);
+
+    /*
+     * Name, country and nationality are kept together in one tuple rather than
+     * in parallel arrays. Parallel arrays of different lengths wrap at
+     * different rates, which is how the first cut of this seed produced
+     * "Hassan Farah, born in Poland, Polish" — plausible in real life, but it
+     * reads as a bug in a demo, and every reviewer stops on it.
+     */
+    private static readonly (string Name, string Country, string Nationality)[] People =
+    [
+        ("Amara Okafor", "Nigeria", "Nigerian"),
+        ("Wei Chen", "China", "Chinese"),
+        ("Sofía Restrepo", "Colombia", "Colombian"),
+        ("Dmitri Volkov", "Russia", "Russian"),
+        ("Priya Raghunathan", "India", "Indian"),
+        ("Miguel Santos", "Brazil", "Brazilian"),
+        ("Fatima Al-Rashid", "Syria", "Syrian"),
+        ("Nguyen Thi Mai", "Vietnam", "Vietnamese"),
+        ("Kwame Mensah", "Ghana", "Ghanaian"),
+        ("Elena Petrova", "Bulgaria", "Bulgarian"),
+        ("Rafael Duarte", "Portugal", "Portuguese"),
+        ("Aisha Kone", "Mali", "Malian"),
+        ("Jae-won Park", "South Korea", "South Korean"),
+        ("Lucia Ferrari", "Italy", "Italian"),
+        ("Omar Haddad", "Lebanon", "Lebanese"),
+        ("Yuki Tanaka", "Japan", "Japanese"),
+        ("Ana Kovač", "Croatia", "Croatian"),
+        ("Tenzin Norbu", "Nepal", "Nepali"),
+        ("Ingrid Larsen", "Norway", "Norwegian"),
+        ("Carlos Mendoza", "Mexico", "Mexican"),
+        ("Zainab Hussein", "Somalia", "Somali"),
+        ("Pavel Novák", "Czechia", "Czech"),
+        ("Rosa Jiménez", "Peru", "Peruvian"),
+        ("Chidi Eze", "Nigeria", "Nigerian"),
+        ("Mei-ling Wu", "Taiwan", "Taiwanese"),
+        ("Hassan Farah", "Somalia", "Somali"),
+        ("Katarzyna Nowak", "Poland", "Polish"),
+        ("Diego Vargas", "Chile", "Chilean"),
+        ("Leila Nasser", "Lebanon", "Lebanese"),
+        ("Sipho Dlamini", "South Africa", "South African"),
+        ("Isabela Cruz", "Philippines", "Filipino"),
+        ("Arjun Patel", "India", "Indian"),
+        ("Marta Silva", "Portugal", "Portuguese"),
+        ("Bilal Ahmed", "Pakistan", "Pakistani"),
+        ("Nadia Popescu", "Romania", "Romanian"),
+        ("Kofi Boateng", "Ghana", "Ghanaian"),
+        ("Sara Lindqvist", "Sweden", "Swedish"),
+        ("Tomás Herrera", "Guatemala", "Guatemalan"),
+        ("Rania Khoury", "Jordan", "Jordanian"),
+        ("Viktor Horváth", "Hungary", "Hungarian")
+    ];
+
+    private static readonly (string City, string State, string Office)[] Places =
+    [
+        ("Boston", "MA", "Boston, MA"), ("Cambridge", "MA", "Boston, MA"),
+        ("Worcester", "MA", "Boston, MA"), ("Providence", "RI", "Providence, RI"),
+        ("Hartford", "CT", "Hartford, CT"), ("Manchester", "NH", "Manchester, NH"),
+        ("Portland", "ME", "Portland, ME"), ("Burlington", "VT", "St. Albans, VT")
+    ];
+
+    private static readonly string[] DocTypes =
+    [
+        "Permanent Resident Card (copy)",
+        "Photographs (2)",
+        "Marriage certificate",
+        "Tax transcripts (5 years)",
+        "Selective Service registration",
+        "Court disposition record",
+        "Travel history affidavit"
+    ];
+
+    public static async Task SeedAsync(NaturalizationDbContext db)
+    {
+        if (await db.Applicants.AnyAsync()) return;
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        // Weighted so the pipeline looks like a real office: lots of cases in
+        // the middle of the process, a handful finished, a couple denied.
+        CaseStatus[] distribution =
+        [
+            CaseStatus.Received, CaseStatus.Received, CaseStatus.Received, CaseStatus.Received,
+            CaseStatus.BiometricsScheduled, CaseStatus.BiometricsScheduled, CaseStatus.BiometricsScheduled,
+            CaseStatus.BiometricsCompleted, CaseStatus.BiometricsCompleted, CaseStatus.BiometricsCompleted,
+            CaseStatus.InterviewScheduled, CaseStatus.InterviewScheduled, CaseStatus.InterviewScheduled,
+            CaseStatus.InterviewCompleted, CaseStatus.InterviewCompleted, CaseStatus.InterviewCompleted,
+            CaseStatus.InterviewCompleted, CaseStatus.InterviewCompleted,
+            CaseStatus.Approved, CaseStatus.Approved, CaseStatus.Approved,
+            CaseStatus.OathScheduled, CaseStatus.OathScheduled,
+            CaseStatus.Naturalized, CaseStatus.Naturalized, CaseStatus.Naturalized, CaseStatus.Naturalized,
+            CaseStatus.Denied, CaseStatus.Denied,
+            CaseStatus.Withdrawn
+        ];
+
+        for (var i = 0; i < People.Length; i++)
+        {
+            var person = People[i];
+            var place = Places[i % Places.Length];
+            var name = person.Name;
+
+            var lprYears = Rng.Next(5, 12);
+            var applicant = new Applicant
+            {
+                AlienNumber = $"A{100_000_000 + Rng.Next(1, 899_999_999)}",
+                FullName = name,
+                DateOfBirth = today.AddDays(-Rng.Next(23 * 365, 62 * 365)),
+                CountryOfBirth = person.Country,
+                Nationality = person.Nationality,
+                AddressLine = $"{Rng.Next(4, 1990)} {new[] { "Elm", "Maple", "Beacon", "Washington", "Liberty", "Concord" }[Rng.Next(6)]} St",
+                City = place.City,
+                State = place.State,
+                PostalCode = $"0{Rng.Next(1000, 9999)}",
+                Email = $"{name.Split(' ')[0].ToLowerInvariant()}.{name.Split(' ')[^1].ToLowerInvariant()}@example.com",
+                Phone = $"({Rng.Next(200, 989)}) {Rng.Next(200, 999)}-{Rng.Next(1000, 9999)}",
+                LawfulPermanentResidentSince = today.AddDays(-lprYears * 365 - Rng.Next(0, 300)),
+                CreatedAt = DateTime.UtcNow.AddDays(-Rng.Next(400, 800))
+            };
+            db.Applicants.Add(applicant);
+
+            var status = distribution[i % distribution.Length];
+
+            /*
+             * A case's age has to match how far it has actually got. Filing
+             * every case at a uniformly random date lets a *Naturalized* case be
+             * only 90 days old, which then forces its oath date into the future —
+             * and the dashboard cheerfully reports an oath administered in 2027.
+             * So the age band is derived from the status.
+             */
+            var (minAge, maxAge) = AgeBandDays(status);
+            var filedOn = today.AddDays(-Rng.Next(minAge, maxAge));
+
+            var c = new NaturalizationCase
+            {
+                Applicant = applicant,
+                ReceiptNumber = $"NBC{2024 + (i % 2)}{Rng.Next(100_000, 999_999)}",
+                FiledOn = filedOn,
+                FieldOffice = place.Office,
+                Status = status
+            };
+
+            /*
+             * Milestone dates. A *scheduled* milestone is legitimately in the
+             * future — that is what "scheduled" means. A completed one must be
+             * in the past. Anything else is incoherent on its face.
+             */
+            var reached = ReachedMilestones(status);
+
+            if (status == CaseStatus.BiometricsScheduled)
+                c.BiometricsOn = today.AddDays(Rng.Next(5, 30));
+            else if (reached.biometrics)
+                c.BiometricsOn = PastBetween(filedOn.AddDays(25), filedOn.AddDays(70), today);
+
+            if (status == CaseStatus.InterviewScheduled)
+                c.InterviewOn = today.AddDays(Rng.Next(5, 40));
+            else if (status is CaseStatus.Approved or CaseStatus.Denied)
+                // Freshly adjudicated: interview in the last few weeks, so the
+                // decision that follows it lands inside the current month and the
+                // dashboard's "this month" tiles are not permanently zero.
+                c.InterviewOn = PastBetween(today.AddDays(-45), today.AddDays(-8), today);
+            else if (reached.interview)
+                c.InterviewOn = PastBetween(filedOn.AddDays(120), filedOn.AddDays(300), today);
+
+            if (status == CaseStatus.OathScheduled)
+                c.OathOn = today.AddDays(Rng.Next(5, 45));
+            else if (reached.oath)
+                c.OathOn = PastBetween(
+                    (c.InterviewOn ?? filedOn).AddDays(40), (c.InterviewOn ?? filedOn).AddDays(120), today);
+
+            // Evidence.
+            var docCount = Rng.Next(2, 5);
+            for (var d = 0; d < docCount; d++)
+            {
+                var type = DocTypes[(i + d) % DocTypes.Length];
+                c.Documents.Add(new EvidenceDocument
+                {
+                    DocumentType = type,
+                    FileName = $"{type.ToLowerInvariant().Replace(' ', '-').Replace("(", "").Replace(")", "")}.pdf",
+                    ContentType = "application/pdf",
+                    SizeBytes = Rng.Next(80_000, 4_500_000),
+                    Sha256 = Convert.ToHexString(
+                        System.Security.Cryptography.SHA256.HashData(
+                            System.Text.Encoding.UTF8.GetBytes($"{c.ReceiptNumber}:{type}"))).ToLowerInvariant(),
+                    Status = status >= CaseStatus.InterviewCompleted
+                        ? DocumentStatus.Verified
+                        : (DocumentStatus)Rng.Next(0, 2),
+                    UploadedAt = filedOn.ToDateTime(TimeOnly.MinValue).AddDays(Rng.Next(1, 30))
+                });
+            }
+
+            // Audit trail: one event per milestone actually reached.
+            AddEvent(c, "Application received", filedOn, "Intake clerk",
+                $"N-400 received at {place.Office} lockbox.");
+
+            /*
+             * The notice for an appointment is mailed some weeks BEFORE it — so
+             * for an upcoming appointment the notice date is a recent past date,
+             * not "appointment minus 14 days" (which would itself be in the
+             * future whenever the appointment is under a fortnight away).
+             */
+            if (reached.biometrics)
+            {
+                AddEvent(c, "Biometrics scheduled",
+                    PastBetween(c.BiometricsOn!.Value.AddDays(-35), c.BiometricsOn!.Value.AddDays(-10), today),
+                    "Scheduling", "Appointment notice mailed.");
+
+                if (status != CaseStatus.BiometricsScheduled)
+                    AddEvent(c, "Biometrics captured", c.BiometricsOn!.Value, "ASC Technician",
+                        "Fingerprints and photograph captured.");
+            }
+
+            if (reached.interview)
+            {
+                AddEvent(c, "Interview scheduled",
+                    PastBetween(c.InterviewOn!.Value.AddDays(-45), c.InterviewOn!.Value.AddDays(-15), today),
+                    "Scheduling", "Interview notice mailed.");
+
+                if (status != CaseStatus.InterviewScheduled)
+                    AddEvent(c, "Interview conducted", c.InterviewOn!.Value, "Officer A. Hernandez",
+                        "Civics and English tests administered.");
+            }
+
+            // Decided cases get a Decision row and a matching audit entry.
+            // A decision, like any completed act, cannot be dated in the future.
+            if (status is CaseStatus.Approved or CaseStatus.OathScheduled or CaseStatus.Naturalized)
+            {
+                var decidedOn = PastBetween(
+                    c.InterviewOn!.Value.AddDays(3), c.InterviewOn!.Value.AddDays(25), today);
+                c.Decision = new Decision
+                {
+                    Outcome = DecisionOutcome.Approved,
+                    DecidedOn = decidedOn,
+                    DecidedBy = "Officer A. Hernandez",
+                    Rationale = "All statutory requirements met. Civics and English tests passed."
+                };
+                AddEvent(c, "Application approved", decidedOn, "Officer A. Hernandez",
+                    "Approved for naturalization.");
+            }
+            else if (status == CaseStatus.Denied)
+            {
+                var decidedOn = PastBetween(
+                    c.InterviewOn!.Value.AddDays(5), c.InterviewOn!.Value.AddDays(30), today);
+                c.Decision = new Decision
+                {
+                    Outcome = DecisionOutcome.Denied,
+                    DecidedOn = decidedOn,
+                    DecidedBy = "Officer M. Whitfield",
+                    Rationale = "Continuous residence not established for the statutory period.",
+                    DenialReasonCode = "316(a)"
+                };
+                AddEvent(c, "Application denied", decidedOn, "Officer M. Whitfield",
+                    "Denied under INA 316(a).");
+            }
+
+            if (reached.oath)
+            {
+                AddEvent(c, "Oath ceremony scheduled",
+                    PastBetween(c.OathOn!.Value.AddDays(-40), c.OathOn!.Value.AddDays(-12), today),
+                    "Scheduling", "Form N-445 mailed.");
+
+                if (status == CaseStatus.Naturalized)
+                    AddEvent(c, "Oath administered", c.OathOn!.Value, "Clerk of Court",
+                        "Certificate of Naturalization issued.");
+            }
+
+            if (status == CaseStatus.Withdrawn)
+                AddEvent(c, "Application withdrawn", filedOn.AddDays(Rng.Next(30, 120)), "Intake clerk",
+                    "Withdrawal requested in writing by applicant.");
+
+            db.Cases.Add(c);
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// How old a case must plausibly be, given how far it has progressed. A
+    /// naturalized case cannot be three months old.
+    /// </summary>
+    private static (int Min, int Max) AgeBandDays(CaseStatus s) => s switch
+    {
+        CaseStatus.Received => (20, 110),
+        CaseStatus.BiometricsScheduled => (45, 150),
+        CaseStatus.BiometricsCompleted => (90, 220),
+        CaseStatus.InterviewScheduled => (150, 330),
+        CaseStatus.InterviewCompleted => (200, 400),
+        CaseStatus.Approved => (240, 430),
+        CaseStatus.Denied => (240, 430),
+        CaseStatus.OathScheduled => (300, 500),
+        CaseStatus.Naturalized => (380, 660),
+        CaseStatus.Withdrawn => (60, 300),
+        _ => (60, 300)
+    };
+
+    /// <summary>Pick a date in [earliest, latest], never later than <paramref name="today"/>.</summary>
+    private static DateOnly PastBetween(DateOnly earliest, DateOnly latest, DateOnly today)
+    {
+        if (latest > today) latest = today;
+        if (earliest > latest) earliest = latest;
+
+        var span = latest.DayNumber - earliest.DayNumber;
+        return span <= 0 ? earliest : earliest.AddDays(Rng.Next(0, span + 1));
+    }
+
+    private static (bool biometrics, bool interview, bool oath) ReachedMilestones(CaseStatus s) => s switch
+    {
+        CaseStatus.Received => (false, false, false),
+        CaseStatus.Withdrawn => (false, false, false),
+        CaseStatus.BiometricsScheduled => (true, false, false),
+        CaseStatus.BiometricsCompleted => (true, false, false),
+        CaseStatus.InterviewScheduled => (true, true, false),
+        CaseStatus.InterviewCompleted => (true, true, false),
+        CaseStatus.Approved => (true, true, false),
+        CaseStatus.Denied => (true, true, false),
+        CaseStatus.OathScheduled => (true, true, true),
+        CaseStatus.Naturalized => (true, true, true),
+        _ => (false, false, false)
+    };
+
+    /*
+     * An audit event records something that HAS happened, so it can never be
+     * dated in the future — clamped here rather than at each call site.
+     *
+     * The distinction that makes this necessary: an appointment date (the
+     * BiometricsOn / InterviewOn / OathOn columns) is legitimately in the
+     * future, but the act of *scheduling* it happened in the past. Deriving the
+     * notice-mailed event as "appointment minus 14 days" therefore lands in the
+     * future whenever the appointment is less than two weeks out, and the
+     * dashboard then reports work done in 2027.
+     */
+    private static void AddEvent(NaturalizationCase c, string type, DateOnly on, string actor, string notes)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (on > today) on = today;
+
+        c.Events.Add(new CaseEvent
+        {
+            EventType = type,
+            OccurredAt = on.ToDateTime(new TimeOnly(9, 0)),
+            Actor = actor,
+            Notes = notes
+        });
+    }
+}

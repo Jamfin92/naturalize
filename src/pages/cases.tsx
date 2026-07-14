@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/table'
 import { api } from '@/lib/api'
 import { useAsync } from '@/lib/use-async'
-import { CASE_STATUSES, STATUS_LABELS, type CaseStatus } from '@/lib/types'
+import { CASE_STATUSES, STATUS_LABELS, TERMINAL_STATUSES, type CaseStatus } from '@/lib/types'
 
 const PAGE_SIZE = 15
 const ALL = '__all__'
@@ -113,7 +113,7 @@ export function CasesPage() {
                   <TableHead>Status</TableHead>
                   <TableHead className="hidden @2xl:table-cell">Filed</TableHead>
                   <TableHead className="hidden @3xl:table-cell">Field office</TableHead>
-                  <TableHead className="text-right">Days pending</TableHead>
+                  <TableHead className="text-right">Days open</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -137,8 +137,13 @@ export function CasesPage() {
                     <TableCell className="text-muted-foreground hidden text-sm @3xl:table-cell">
                       {c.fieldOffice}
                     </TableCell>
+                    {/* A day count on a closed case is noise — it stopped ticking. */}
                     <TableCell className="text-right font-mono text-xs tabular-nums">
-                      {c.daysPending}
+                      {TERMINAL_STATUSES.includes(c.status) ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : (
+                        c.daysPending
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

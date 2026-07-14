@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { useAsync } from '@/lib/use-async'
-import { STATUS_LABELS, type DocumentStatus } from '@/lib/types'
+import { STATUS_LABELS, TERMINAL_STATUSES, type DocumentStatus } from '@/lib/types'
 
 const DOC_ICON: Record<DocumentStatus, React.ElementType> = {
   Received: FileClock,
@@ -84,7 +84,11 @@ export function CaseDetailPage() {
 
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <StatusBadge status={data.status} className="px-3 py-1 text-sm" />
-        <span className="text-muted-foreground text-sm">{data.daysPending} days pending</span>
+        <span className="text-muted-foreground text-sm">
+          {TERMINAL_STATUSES.includes(data.status)
+            ? `Closed after ${data.daysPending} days`
+            : `${data.daysPending} days open`}
+        </span>
         {data.decision && (
           <>
             <Separator orientation="vertical" className="h-5" />
