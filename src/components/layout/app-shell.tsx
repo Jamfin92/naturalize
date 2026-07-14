@@ -1,17 +1,6 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import {
-  FileText,
-  Gavel,
-  LayoutDashboard,
-  LogOut,
-  Moon,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Stamp,
-  Sun,
-  Users,
-} from 'lucide-react'
+import { LogOut, Moon, PanelLeftClose, PanelLeftOpen, Stamp, Sun, Users } from 'lucide-react'
 
 import { UsFlag } from '@/components/flag/us-flag'
 import { useTheme } from '@/components/theme-provider'
@@ -23,10 +12,7 @@ import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 const NAV = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/applicants', label: 'Applicants', icon: Users },
-  { to: '/cases', label: 'Cases', icon: FileText },
-  { to: '/approvals', label: 'Approvals', icon: Gavel },
   { to: '/reports', label: 'Reports', icon: Stamp },
 ]
 

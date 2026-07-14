@@ -78,11 +78,8 @@ public static class ReportEndpoints
         .WithSummary("Current caseload by status, with aging and the oldest pending matters.")
         .Produces(StatusCodes.Status200OK, contentType: "application/pdf");
 
-        // Dashboard metrics. Not a report, but it shares CaseMetrics with the
-        // pipeline PDF so the screen and the print-out cannot disagree.
-        app.MapGet("/api/metrics", async (CaseMetrics metrics) => TypedResults.Ok(await metrics.ComputeAsync()))
-            .WithTags("Reports")
-            .WithName("GetMetrics")
-            .RequireAuthorization();
+        // The /api/metrics dashboard endpoint moved to the enhancement branch with
+        // the dashboard screen that consumed it. CaseMetrics itself stays — the
+        // pipeline PDF above still depends on it.
     }
 }

@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
+using Microsoft.Extensions.DependencyInjection;
+using Naturalization.Api.Data;
+using Naturalization.Api.Domain;
 
 namespace Naturalization.Api.Tests;
 
@@ -42,28 +45,49 @@ public class ReportTests(ApiFactory factory) : IClassFixture<ApiFactory>
     [Fact]
     public async Task A_case_record_renders_for_a_seeded_case()
     {
-        // This test seeds one applicant + case of its own, since Seed:Demo is off.
         var client = await factory.SignedInAsync();
 
-        var created = await client.PostAsJsonAsync("/api/applicants",
-            TestClient.SampleApplicant("A900800700", "Case Owner"));
-        var applicant = await created.Content.ReadFromJsonAsync<TestClient.ApplicantResponse>();
-
-        var caseRes = await client.PostAsJsonAsync("/api/cases", new
+        /*
+         * This build has no POST /api/cases — the case-write surface lives on the
+         * enhancement branch. But the case DOMAIN and the Case Record PDF stay, so
+         * the fixture is seeded straight through the DbContext. (Seed:Demo is off,
+         * so nothing else is in the database.)
+         */
+        int caseId;
+        using (var scope = factory.Services.CreateScope())
         {
-            applicantId = applicant!.Id,
-            receiptNumber = "NBC2024000999",
-            filedOn = "2025-01-15",
-            fieldOffice = "Boston, MA",
-        });
-        caseRes.EnsureSuccessStatusCode();
-        var created2 = await caseRes.Content.ReadFromJsonAsync<CaseResponse>();
+            var db = scope.ServiceProvider.GetRequiredService<NaturalizationDbContext>();
+            var applicant = new Applicant
+            {
+                AlienNumber = "A900800700",
+                FullName = "Case Owner",
+                DateOfBirth = new DateOnly(1988, 3, 14),
+                LawfulPermanentResidentSince = new DateOnly(2016, 6, 1),
+                CreatedAt = DateTime.UtcNow,
+            };
+            var record = new NaturalizationCase
+            {
+                Applicant = applicant,
+                ReceiptNumber = "NBC2024000999",
+                FiledOn = new DateOnly(2025, 1, 15),
+                FieldOffice = "Boston, MA",
+                Status = CaseStatus.InterviewCompleted,
+            };
+            record.Events.Add(new CaseEvent
+            {
+                EventType = "Application received",
+                OccurredAt = DateTime.UtcNow,
+                Actor = "System",
+                Notes = "Seeded for the report test.",
+            });
+            db.Cases.Add(record);
+            await db.SaveChangesAsync();
+            caseId = record.Id;
+        }
 
-        var pdf = await client.GetAsync($"/api/reports/case/{created2!.Id}.pdf");
+        var pdf = await client.GetAsync($"/api/reports/case/{caseId}.pdf");
         pdf.EnsureSuccessStatusCode();
         var bytes = await pdf.Content.ReadAsByteArrayAsync();
         Assert.Equal("%PDF", Encoding.ASCII.GetString(bytes, 0, 4));
     }
-
-    private record CaseResponse(int Id, string ReceiptNumber);
 }
