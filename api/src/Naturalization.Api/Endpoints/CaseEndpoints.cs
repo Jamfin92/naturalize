@@ -1,5 +1,7 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using Naturalization.Api.Auth;
 using Naturalization.Api.Data;
 using Naturalization.Api.Domain;
 using Naturalization.Api.Dtos;
@@ -11,7 +13,9 @@ public static class CaseEndpoints
 {
     public static void MapCases(this IEndpointRouteBuilder app)
     {
-        var g = app.MapGroup("/api/cases").WithTags("Cases");
+        var g = app.MapGroup("/api/cases")
+            .WithTags("Cases")
+            .RequireAuthorization();
 
         g.MapGet("/", async (NaturalizationDbContext db, string? q, string? status, int page = 1, int pageSize = 15) =>
         {
@@ -97,7 +101,12 @@ public static class CaseEndpoints
 
             if (string.IsNullOrWhiteSpace(input.ReceiptNumber))
                 errors["receiptNumber"] = ["Receipt number is required."];
-            else if (await db.Cases.AnyAsync(c => c.ReceiptNumber == input.ReceiptNumber))
+
+            // IgnoreQueryFilters, for the same reason as AlienNumber over in
+            // ApplicantEndpoints: the unique index on ReceiptNumber is NOT filtered
+            // by IsDeleted, so a filtered probe would miss a withdrawn case's
+            // receipt number, and the insert would hit the index and 500.
+            else if (await db.Cases.IgnoreQueryFilters().AnyAsync(c => c.ReceiptNumber == input.ReceiptNumber))
                 errors["receiptNumber"] = [$"Receipt number {input.ReceiptNumber} is already on file."];
 
             if (input.FiledOn > DateOnly.FromDateTime(DateTime.UtcNow))
@@ -137,7 +146,7 @@ public static class CaseEndpoints
          * caller set Status to an arbitrary value.
          */
         g.MapPost("/{id:int}/status", async Task<Results<Ok<CaseDto>, NotFound, ValidationProblem>> (
-            NaturalizationDbContext db, int id, TransitionInput input) =>
+            NaturalizationDbContext db, ClaimsPrincipal user, int id, TransitionInput input) =>
         {
             var c = await db.Cases.Include(x => x.Applicant).FirstOrDefaultAsync(x => x.Id == id);
             if (c is null) return TypedResults.NotFound();
@@ -185,7 +194,7 @@ public static class CaseEndpoints
             {
                 EventType = $"Status changed to {target}",
                 OccurredAt = now,
-                Actor = string.IsNullOrWhiteSpace(input.Actor) ? "Unknown officer" : input.Actor,
+                Actor = user.OfficerName(),   // from the token, not the request body
                 Notes = input.Notes ?? ""
             });
 
@@ -195,15 +204,26 @@ public static class CaseEndpoints
         .WithName("TransitionCase")
         .WithSummary("Advance a case to a new status. Rejects transitions the state machine disallows.");
 
-        g.MapDelete("/{id:int}", async Task<Results<NoContent, NotFound>> (NaturalizationDbContext db, int id) =>
+        g.MapDelete("/{id:int}", async Task<Results<NoContent, NotFound>> (
+            NaturalizationDbContext db, ClaimsPrincipal user, int id) =>
         {
             var c = await db.Cases.FirstOrDefaultAsync(x => x.Id == id);
             if (c is null) return TypedResults.NotFound();
 
-            db.Cases.Remove(c);
+            // Soft delete. A hard Remove() would now THROW anyway — every FK into
+            // this table is DeleteBehavior.Restrict precisely so that destroying a
+            // case's evidence and audit trail cannot happen by accident.
+            c.IsDeleted = true;
+            c.DeletedAt = DateTime.UtcNow;
+            c.DeletedBy = user.OfficerName();
+
+            AuditLog.Record(db, user, nameof(NaturalizationCase), c.Id, "Deleted",
+                $"Case {c.ReceiptNumber} withdrawn. Record and audit trail retained.");
+
             await db.SaveChangesAsync();
             return TypedResults.NoContent();
         })
-        .WithName("DeleteCase");
+        .WithName("DeleteCase")
+        .WithSummary("Withdraw a case. Soft delete: nothing is destroyed.");
     }
 }

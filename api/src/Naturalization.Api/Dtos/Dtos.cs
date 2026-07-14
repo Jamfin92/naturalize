@@ -2,6 +2,28 @@ using Naturalization.Api.Domain;
 
 namespace Naturalization.Api.Dtos;
 
+public record LoginInput(string Email, string Password);
+
+public record OfficerDto(int Id, string Name, string Email, string FieldOffice)
+{
+    public static OfficerDto From(OfficerAccount o) => new(o.Id, o.FullName, o.Email, o.FieldOffice);
+}
+
+public record LoginResult(string AccessToken, DateTime ExpiresAt, OfficerDto Officer);
+
+public record AuditEventDto(
+    int Id,
+    string EntityType,
+    int EntityId,
+    string Action,
+    string Actor,
+    DateTime OccurredAt,
+    string Summary)
+{
+    public static AuditEventDto From(AuditEvent e) => new(
+        e.Id, e.EntityType, e.EntityId, e.Action, e.Actor, e.OccurredAt, e.Summary);
+}
+
 public record ApplicantDto(
     int Id,
     string AlienNumber,
@@ -80,7 +102,10 @@ public record CaseDetailDto(
 
 public record CaseInput(int ApplicantId, string ReceiptNumber, DateOnly FiledOn, string FieldOffice);
 
-public record TransitionInput(string Status, string Actor, string? Notes);
+// No `Actor` field, and no `DecidedBy` on DecisionInput below. Both used to be
+// supplied by the CLIENT, which meant the audit trail recorded whatever name the
+// caller typed. They now come from the bearer token. See Auth/OfficerPrincipal.
+public record TransitionInput(string Status, string? Notes);
 
 public record DecisionDto(
     int Id,
@@ -103,7 +128,6 @@ public record DecisionDto(
 public record DecisionInput(
     int CaseId,
     string Outcome,
-    string DecidedBy,
     string Rationale,
     string? DenialReasonCode);
 

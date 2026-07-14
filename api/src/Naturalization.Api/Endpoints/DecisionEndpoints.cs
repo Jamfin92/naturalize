@@ -1,5 +1,7 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
+using Naturalization.Api.Auth;
 using Naturalization.Api.Data;
 using Naturalization.Api.Domain;
 using Naturalization.Api.Dtos;
@@ -11,7 +13,9 @@ public static class DecisionEndpoints
 {
     public static void MapDecisions(this IEndpointRouteBuilder app)
     {
-        var g = app.MapGroup("/api/decisions").WithTags("Decisions");
+        var g = app.MapGroup("/api/decisions")
+            .WithTags("Decisions")
+            .RequireAuthorization();
 
         g.MapGet("/", async (NaturalizationDbContext db, DateOnly? from, DateOnly? to, string? fieldOffice) =>
         {
@@ -50,7 +54,7 @@ public static class DecisionEndpoints
          * They must not be able to drift apart, so they share one SaveChanges.
          */
         g.MapPost("/", async Task<Results<Created<DecisionDto>, ValidationProblem>> (
-            NaturalizationDbContext db, DecisionInput input) =>
+            NaturalizationDbContext db, ClaimsPrincipal user, DecisionInput input) =>
         {
             var errors = new Dictionary<string, string[]>();
 
@@ -104,7 +108,10 @@ public static class DecisionEndpoints
                 CaseId = c.Id,
                 Outcome = outcome,
                 DecidedOn = today,
-                DecidedBy = string.IsNullOrWhiteSpace(input.DecidedBy) ? "Unknown officer" : input.DecidedBy,
+                // Who signed this adjudication comes from the bearer token. It used
+                // to come from the request body, i.e. the client got to nominate
+                // whose name went on the denial of somebody's citizenship.
+                DecidedBy = user.OfficerName(),
                 Rationale = input.Rationale,
                 DenialReasonCode = outcome == DecisionOutcome.Denied ? input.DenialReasonCode : null
             };
@@ -149,16 +156,16 @@ public static class DecisionEndpoints
         .WithName("CreateDecision")
         .WithSummary("Record an adjudication decision and advance the case accordingly.");
 
-        g.MapDelete("/{id:int}", async Task<Results<NoContent, NotFound>> (NaturalizationDbContext db, int id) =>
-        {
-            var d = await db.Decisions.FirstOrDefaultAsync(x => x.Id == id);
-            if (d is null) return TypedResults.NotFound();
-
-            db.Decisions.Remove(d);
-            await db.SaveChangesAsync();
-            return TypedResults.NoContent();
-        })
-        .WithName("DeleteDecision")
-        .WithSummary("Rescind a decision. Present for CRUD completeness; a real deployment should not expose this.");
+        /*
+         * There is no DELETE here any more.
+         *
+         * There used to be one, carrying the comment "present for CRUD
+         * completeness; a real deployment should not expose this" — which is an
+         * argument for deleting the endpoint, not for shipping it. It hard-deleted
+         * the adjudication record of somebody's citizenship application while
+         * leaving the "Decision recorded" event in the case timeline pointing at
+         * nothing, and it never rolled the case status back. CRUD symmetry is not
+         * a reason to let an officer erase an adjudication.
+         */
     }
 }
