@@ -36,13 +36,17 @@ see [Scope](#scope).
 You need **Node 20+** and the **.NET 8 SDK**.
 
 ```bash
-# 1. API — http://localhost:5099 (Swagger at /swagger)
-#    Applies migrations and seeds a SQLite database on first run.
-dotnet run --project api/src/Naturalization.Api
-
-# 2. Frontend — http://localhost:5173
 npm install
-npm run dev
+npm run dev:all      # API on :5099 (Swagger at /swagger) + frontend on :5173, together
+```
+
+`dev:all` runs both servers in one terminal and Ctrl+C stops both. The API applies migrations and
+seeds a SQLite database on first run. Prefer separate terminals? Run them independently — `npm run
+dev` starts **only** the frontend:
+
+```bash
+dotnet run --project api/src/Naturalization.Api   # API   → http://localhost:5099
+npm run dev                                        # front → http://localhost:5173
 ```
 
 Sign in with **`a.hernandez@example.gov`** / **`Naturalize!Demo1`**. The seeded database contains 40
