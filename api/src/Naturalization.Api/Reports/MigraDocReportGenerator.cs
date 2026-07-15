@@ -7,7 +7,7 @@ using Naturalization.Api.Services;
 
 namespace Naturalization.Api.Reports;
 
-public class MigraDocReportGenerator(NaturalizationDbContext db, CaseMetrics metrics) : IReportGenerator
+public partial class MigraDocReportGenerator(NaturalizationDbContext db, CaseMetrics metrics) : IReportGenerator
 {
     public async Task<byte[]> CaseRecordAsync(int caseId, CancellationToken ct = default)
     {

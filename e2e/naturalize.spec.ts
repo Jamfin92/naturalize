@@ -64,7 +64,8 @@ test.describe('applicants', () => {
     await page.getByRole('link', { name: 'Applicants' }).click()
     await page.getByRole('link', { name: 'New applicant' }).click()
 
-    await page.getByLabel('Full name').fill('Testcase Applicant')
+    await page.getByLabel('First name').fill('Testcase')
+    await page.getByLabel('Last name').fill('Applicant')
     await page.getByLabel('A-Number').fill(aNumber)
     await page.getByLabel('Date of birth').fill('1988-03-14')
     await page.getByLabel('LPR since').fill('2016-06-01')
@@ -90,7 +91,8 @@ test.describe('applicants', () => {
 
     // Create one to edit.
     await page.goto('/applicants/new')
-    await page.getByLabel('Full name').fill('Editable Person')
+    await page.getByLabel('First name').fill('Editable')
+    await page.getByLabel('Last name').fill('Person')
     await page.getByLabel('A-Number').fill(aNumber)
     await page.getByLabel('Date of birth').fill('1990-01-01')
     await page.getByLabel('LPR since').fill('2015-01-01')
@@ -117,7 +119,8 @@ test.describe('applicants', () => {
     await signIn(page)
 
     await page.goto('/applicants/new')
-    await page.getByLabel('Full name').fill('Withdrawn Person')
+    await page.getByLabel('First name').fill('Withdrawn')
+    await page.getByLabel('Last name').fill('Person')
     await page.getByLabel('A-Number').fill(aNumber)
     await page.getByLabel('Date of birth').fill('1985-05-05')
     await page.getByLabel('LPR since').fill('2014-01-01')
@@ -140,7 +143,8 @@ test.describe('applicants', () => {
      * because the applicant and their whole audit trail had been erased.
      */
     await page.goto('/applicants/new')
-    await page.getByLabel('Full name').fill('Impostor')
+    await page.getByLabel('First name').fill('Impostor')
+    await page.getByLabel('Last name').fill('Person')
     await page.getByLabel('A-Number').fill(aNumber)
     await page.getByLabel('Date of birth').fill('1985-05-05')
     await page.getByLabel('LPR since').fill('2014-01-01')
@@ -199,5 +203,17 @@ test.describe('reports', () => {
     const [download] = await Promise.all([page.waitForEvent('download'), button.click()])
 
     expect(download.suggestedFilename()).toBe('case-record-1.pdf')
+  })
+
+  test('the mailing labels download as a PDF', async ({ page }) => {
+    await signIn(page)
+    await page.goto('/reports')
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'Download Mailing labels' }).click(),
+    ])
+
+    expect(download.suggestedFilename()).toMatch(/^mailing-labels-\d{8}\.pdf$/)
   })
 })

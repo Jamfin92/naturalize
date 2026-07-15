@@ -55,7 +55,9 @@ public class NaturalizationDbContext(DbContextOptions<NaturalizationDbContext> o
              */
             e.HasIndex(x => x.AlienNumber).IsUnique();
 
-            e.Property(x => x.FullName).HasMaxLength(200).IsRequired();
+            e.Property(x => x.FirstName).HasMaxLength(100).IsRequired();
+            e.Property(x => x.MiddleName).HasMaxLength(100);
+            e.Property(x => x.LastName).HasMaxLength(100).IsRequired();
             e.Property(x => x.CountryOfBirth).HasMaxLength(100);
             e.Property(x => x.Nationality).HasMaxLength(100);
             e.Property(x => x.Email).HasMaxLength(200);
