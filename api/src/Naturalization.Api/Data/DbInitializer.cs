@@ -14,54 +14,61 @@ namespace Naturalization.Api.Data;
 public static class DbInitializer
 {
     /*
-     * Name, country and nationality are kept together in one tuple rather than
-     * in parallel arrays. Parallel arrays of different lengths wrap at
-     * different rates, which is how the first cut of this seed produced
-     * "Hassan Farah, born in Poland, Polish" — plausible in real life, but it
-     * reads as a bug in a demo, and every reviewer stops on it.
+     * First, (optional) middle and last name are kept alongside country and
+     * nationality in one tuple rather than in parallel arrays. Parallel arrays
+     * of different lengths wrap at different rates, which is how the first cut
+     * of this seed produced "Hassan Farah, born in Poland, Polish" — plausible
+     * in real life, but it reads as a bug in a demo, and every reviewer stops
+     * on it.
+     *
+     * Most people have no middle name (Middle is null); a handful carry one so
+     * the split-name field and the mailing labels visibly exercise all three
+     * parts. The names are given as explicit parts rather than split from a
+     * single string, so multi-token and hyphenated names ("Nguyen Thi Mai",
+     * "Fatima Al-Rashid") land in the right columns.
      */
-    private static readonly (string Name, string Country, string Nationality)[] People =
+    private static readonly (string First, string? Middle, string Last, string Country, string Nationality)[] People =
     [
-        ("Amara Okafor", "Nigeria", "Nigerian"),
-        ("Wei Chen", "China", "Chinese"),
-        ("Sofía Restrepo", "Colombia", "Colombian"),
-        ("Dmitri Volkov", "Russia", "Russian"),
-        ("Priya Raghunathan", "India", "Indian"),
-        ("Miguel Santos", "Brazil", "Brazilian"),
-        ("Fatima Al-Rashid", "Syria", "Syrian"),
-        ("Nguyen Thi Mai", "Vietnam", "Vietnamese"),
-        ("Kwame Mensah", "Ghana", "Ghanaian"),
-        ("Elena Petrova", "Bulgaria", "Bulgarian"),
-        ("Rafael Duarte", "Portugal", "Portuguese"),
-        ("Aisha Kone", "Mali", "Malian"),
-        ("Jae-won Park", "South Korea", "South Korean"),
-        ("Lucia Ferrari", "Italy", "Italian"),
-        ("Omar Haddad", "Lebanon", "Lebanese"),
-        ("Yuki Tanaka", "Japan", "Japanese"),
-        ("Ana Kovač", "Croatia", "Croatian"),
-        ("Tenzin Norbu", "Nepal", "Nepali"),
-        ("Ingrid Larsen", "Norway", "Norwegian"),
-        ("Carlos Mendoza", "Mexico", "Mexican"),
-        ("Zainab Hussein", "Somalia", "Somali"),
-        ("Pavel Novák", "Czechia", "Czech"),
-        ("Rosa Jiménez", "Peru", "Peruvian"),
-        ("Chidi Eze", "Nigeria", "Nigerian"),
-        ("Mei-ling Wu", "Taiwan", "Taiwanese"),
-        ("Hassan Farah", "Somalia", "Somali"),
-        ("Katarzyna Nowak", "Poland", "Polish"),
-        ("Diego Vargas", "Chile", "Chilean"),
-        ("Leila Nasser", "Lebanon", "Lebanese"),
-        ("Sipho Dlamini", "South Africa", "South African"),
-        ("Isabela Cruz", "Philippines", "Filipino"),
-        ("Arjun Patel", "India", "Indian"),
-        ("Marta Silva", "Portugal", "Portuguese"),
-        ("Bilal Ahmed", "Pakistan", "Pakistani"),
-        ("Nadia Popescu", "Romania", "Romanian"),
-        ("Kofi Boateng", "Ghana", "Ghanaian"),
-        ("Sara Lindqvist", "Sweden", "Swedish"),
-        ("Tomás Herrera", "Guatemala", "Guatemalan"),
-        ("Rania Khoury", "Jordan", "Jordanian"),
-        ("Viktor Horváth", "Hungary", "Hungarian")
+        ("Amara", "Chidinma", "Okafor", "Nigeria", "Nigerian"),
+        ("Wei", null, "Chen", "China", "Chinese"),
+        ("Sofía", "Isabel", "Restrepo", "Colombia", "Colombian"),
+        ("Dmitri", null, "Volkov", "Russia", "Russian"),
+        ("Priya", null, "Raghunathan", "India", "Indian"),
+        ("Miguel", "Antônio", "Santos", "Brazil", "Brazilian"),
+        ("Fatima", null, "Al-Rashid", "Syria", "Syrian"),
+        ("Nguyen", "Thi", "Mai", "Vietnam", "Vietnamese"),
+        ("Kwame", null, "Mensah", "Ghana", "Ghanaian"),
+        ("Elena", null, "Petrova", "Bulgaria", "Bulgarian"),
+        ("Rafael", null, "Duarte", "Portugal", "Portuguese"),
+        ("Aisha", null, "Kone", "Mali", "Malian"),
+        ("Jae-won", null, "Park", "South Korea", "South Korean"),
+        ("Lucia", null, "Ferrari", "Italy", "Italian"),
+        ("Omar", null, "Haddad", "Lebanon", "Lebanese"),
+        ("Yuki", null, "Tanaka", "Japan", "Japanese"),
+        ("Ana", null, "Kovač", "Croatia", "Croatian"),
+        ("Tenzin", null, "Norbu", "Nepal", "Nepali"),
+        ("Ingrid", null, "Larsen", "Norway", "Norwegian"),
+        ("Carlos", "Eduardo", "Mendoza", "Mexico", "Mexican"),
+        ("Zainab", null, "Hussein", "Somalia", "Somali"),
+        ("Pavel", null, "Novák", "Czechia", "Czech"),
+        ("Rosa", "María", "Jiménez", "Peru", "Peruvian"),
+        ("Chidi", null, "Eze", "Nigeria", "Nigerian"),
+        ("Mei-ling", null, "Wu", "Taiwan", "Taiwanese"),
+        ("Hassan", null, "Farah", "Somalia", "Somali"),
+        ("Katarzyna", null, "Nowak", "Poland", "Polish"),
+        ("Diego", null, "Vargas", "Chile", "Chilean"),
+        ("Leila", null, "Nasser", "Lebanon", "Lebanese"),
+        ("Sipho", null, "Dlamini", "South Africa", "South African"),
+        ("Isabela", null, "Cruz", "Philippines", "Filipino"),
+        ("Arjun", "Kumar", "Patel", "India", "Indian"),
+        ("Marta", null, "Silva", "Portugal", "Portuguese"),
+        ("Bilal", null, "Ahmed", "Pakistan", "Pakistani"),
+        ("Nadia", null, "Popescu", "Romania", "Romanian"),
+        ("Kofi", null, "Boateng", "Ghana", "Ghanaian"),
+        ("Sara", null, "Lindqvist", "Sweden", "Swedish"),
+        ("Tomás", null, "Herrera", "Guatemala", "Guatemalan"),
+        ("Rania", null, "Khoury", "Jordan", "Jordanian"),
+        ("Viktor", null, "Horváth", "Hungary", "Hungarian")
     ];
 
     private static readonly (string City, string State, string Office)[] Places =
@@ -168,7 +175,6 @@ public static class DbInitializer
         {
             var person = People[i];
             var place = Places[i % Places.Length];
-            var name = person.Name;
 
             var lprYears = rng.Next(5, 12);
             var applicant = new Applicant
@@ -178,7 +184,9 @@ public static class DbInitializer
                 // index; a stride does not, and it also makes the seeded data
                 // assertable from a test.
                 AlienNumber = $"A{100_000_000 + i * 7_919_237}",
-                FullName = name,
+                FirstName = person.First,
+                MiddleName = person.Middle,
+                LastName = person.Last,
                 DateOfBirth = today.AddDays(-rng.Next(23 * 365, 62 * 365)),
                 CountryOfBirth = person.Country,
                 Nationality = person.Nationality,
@@ -186,7 +194,7 @@ public static class DbInitializer
                 City = place.City,
                 State = place.State,
                 PostalCode = $"0{rng.Next(1000, 9999)}",
-                Email = $"{name.Split(' ')[0].ToLowerInvariant()}.{name.Split(' ')[^1].ToLowerInvariant()}@example.com",
+                Email = $"{person.First.ToLowerInvariant()}.{person.Last.ToLowerInvariant()}@example.com",
                 Phone = $"({rng.Next(200, 989)}) {rng.Next(200, 999)}-{rng.Next(1000, 9999)}",
                 LawfulPermanentResidentSince = today.AddDays(-lprYears * 365 - rng.Next(0, 300)),
                 CreatedAt = DateTime.UtcNow.AddDays(-rng.Next(400, 800))

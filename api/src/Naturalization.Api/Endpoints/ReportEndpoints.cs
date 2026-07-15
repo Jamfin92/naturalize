@@ -78,6 +78,16 @@ public static class ReportEndpoints
         .WithSummary("Current caseload by status, with aging and the oldest pending matters.")
         .Produces(StatusCodes.Status200OK, contentType: "application/pdf");
 
+        g.MapGet("/labels.pdf", async (IReportGenerator reports, CancellationToken ct) =>
+        {
+            var pdf = await reports.MailingLabelsAsync(ct);
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            return Results.File(pdf, "application/pdf", $"mailing-labels-{today:yyyyMMdd}.pdf");
+        })
+        .WithName("MailingLabelsPdf")
+        .WithSummary("Avery 5160 mailing labels — one per active applicant, name and address.")
+        .Produces(StatusCodes.Status200OK, contentType: "application/pdf");
+
         // Dashboard metrics. Not a report, but it shares CaseMetrics with the
         // pipeline PDF so the screen and the print-out cannot disagree.
         app.MapGet("/api/metrics", async (CaseMetrics metrics) => TypedResults.Ok(await metrics.ComputeAsync()))

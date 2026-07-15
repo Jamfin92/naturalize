@@ -26,14 +26,19 @@ public static class ApplicantEndpoints
             if (!string.IsNullOrWhiteSpace(q))
             {
                 var term = q.Trim();
+                // Match against the real name columns, not the computed FullName —
+                // a [NotMapped] property can't be translated to SQL.
                 query = query.Where(a =>
-                    EF.Functions.Like(a.FullName, $"%{term}%") ||
+                    EF.Functions.Like(a.FirstName, $"%{term}%") ||
+                    EF.Functions.Like(a.MiddleName, $"%{term}%") ||
+                    EF.Functions.Like(a.LastName, $"%{term}%") ||
                     EF.Functions.Like(a.AlienNumber, $"%{term}%"));
             }
 
             var total = await query.CountAsync();
             var items = await query
-                .OrderBy(a => a.FullName)
+                .OrderBy(a => a.LastName)
+                .ThenBy(a => a.FirstName)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .Select(a => ApplicantDto.From(a))
@@ -127,7 +132,9 @@ public static class ApplicantEndpoints
             var a = new Applicant
             {
                 AlienNumber = input.AlienNumber,
-                FullName = input.FullName,
+                FirstName = input.FirstName,
+                MiddleName = NormalizeMiddle(input.MiddleName),
+                LastName = input.LastName,
                 DateOfBirth = input.DateOfBirth,
                 CountryOfBirth = input.CountryOfBirth,
                 Nationality = input.Nationality,
@@ -176,7 +183,9 @@ public static class ApplicantEndpoints
             var changes = Diff(a, input);
 
             a.AlienNumber = input.AlienNumber;
-            a.FullName = input.FullName;
+            a.FirstName = input.FirstName;
+            a.MiddleName = NormalizeMiddle(input.MiddleName);
+            a.LastName = input.LastName;
             a.DateOfBirth = input.DateOfBirth;
             a.CountryOfBirth = input.CountryOfBirth;
             a.Nationality = input.Nationality;
@@ -257,12 +266,20 @@ public static class ApplicantEndpoints
         .WithSummary("Return a withdrawn applicant to the active register.");
     }
 
+    /// <summary>Trim a middle name and fold blank/whitespace to null, so the
+    /// column stays null rather than storing an empty string.</summary>
+    private static string? NormalizeMiddle(string? middle) =>
+        string.IsNullOrWhiteSpace(middle) ? null : middle.Trim();
+
     private static Dictionary<string, string[]> Validate(ApplicantInput i)
     {
         var errors = new Dictionary<string, string[]>();
 
-        if (string.IsNullOrWhiteSpace(i.FullName))
-            errors["fullName"] = ["Full name is required."];
+        if (string.IsNullOrWhiteSpace(i.FirstName))
+            errors["firstName"] = ["First name is required."];
+
+        if (string.IsNullOrWhiteSpace(i.LastName))
+            errors["lastName"] = ["Last name is required."];
 
         if (string.IsNullOrWhiteSpace(i.AlienNumber))
             errors["alienNumber"] = ["A-Number is required."];
@@ -289,7 +306,11 @@ public static class ApplicantEndpoints
         }
 
         Check("A-Number", a.AlienNumber, i.AlienNumber);
-        Check("name", a.FullName, i.FullName);
+        Check("first name", a.FirstName, i.FirstName);
+        // Compare the normalised middle so a blank form field ("") vs a null
+        // column doesn't log a phantom change on every save.
+        Check("middle name", a.MiddleName, NormalizeMiddle(i.MiddleName));
+        Check("last name", a.LastName, i.LastName);
         Check("date of birth", a.DateOfBirth, i.DateOfBirth);
         Check("country of birth", a.CountryOfBirth, i.CountryOfBirth);
         Check("nationality", a.Nationality, i.Nationality);

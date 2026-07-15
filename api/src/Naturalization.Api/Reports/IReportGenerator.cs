@@ -20,4 +20,7 @@ public interface IReportGenerator
 
     /// <summary>Current caseload by status, with aging and the oldest pending matters.</summary>
     Task<byte[]> PipelineAsync(CancellationToken ct = default);
+
+    /// <summary>One mailing label per active applicant, laid out for Avery 5160 label sheets.</summary>
+    Task<byte[]> MailingLabelsAsync(CancellationToken ct = default);
 }

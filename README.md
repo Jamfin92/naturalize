@@ -23,7 +23,7 @@ way. The operator is a caseworker or clerk, not the applicant.
 | **Frontend** | Vite 8 · React 19 · TypeScript · Tailwind v4 · shadcn/ui · React Router 7 |
 | **Backend** | ASP.NET Core 8 minimal APIs · EF Core 8 (migrations) · SQLite |
 | **Auth** | Local JWT forms auth (HS256), with a dormant Okta carve-out |
-| **Reports** | PDFsharp + MigraDoc (MIT) — three server-rendered PDFs with embedded fonts |
+| **Reports** | PDFsharp + MigraDoc (MIT) — four server-rendered PDFs with embedded fonts |
 | **Tests** | xUnit integration tests over the real host · Playwright end-to-end |
 | **Licence** | MIT |
 
@@ -33,8 +33,9 @@ way. The operator is a caseworker or clerk, not the applicant.
   append-only audit trail. Status changes go through a guarded endpoint that rejects illegal jumps.
 - **Approvals** — record an approve / deny / continue decision against a case that has completed
   interview. Writes the decision, advances the case, and appends to the audit trail atomically.
-- **Reports** — Case Record, Approvals (per-office approval rates), and Pipeline (caseload by status,
-  plus aging), each rendered server-side as a PDF with embedded fonts.
+- **Reports** — Case Record, Approvals (per-office approval rates), Pipeline (caseload by status,
+  plus aging), and Mailing labels (Avery 5160, one per active applicant), each rendered server-side as
+  a PDF with embedded fonts.
 - **Record history** — every change to a record, and the officer who made it, taken from their bearer
   token, never from the request body.
 
@@ -215,6 +216,7 @@ GET    /api/metrics
 GET    /api/reports/case/{id}.pdf
 GET    /api/reports/approvals.pdf?from=&to=&fieldOffice=
 GET    /api/reports/pipeline.pdf
+GET    /api/reports/labels.pdf
 ```
 
 ## Tests

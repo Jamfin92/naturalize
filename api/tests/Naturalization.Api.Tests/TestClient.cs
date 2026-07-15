@@ -32,21 +32,28 @@ public static class TestClient
         return body!.AccessToken;
     }
 
-    public static object SampleApplicant(string alienNumber, string fullName = "Test Applicant") => new
+    public static object SampleApplicant(string alienNumber, string name = "Test Applicant")
     {
-        alienNumber,
-        fullName,
-        dateOfBirth = "1988-03-14",
-        countryOfBirth = "Kenya",
-        nationality = "Kenyan",
-        addressLine = "1 Test St",
-        city = "Boston",
-        state = "MA",
-        postalCode = "02101",
-        email = "test@example.com",
-        phone = "(555) 555-5555",
-        lawfulPermanentResidentSince = "2016-06-01",
-    };
+        // Callers pass a two-token display name; split it into the parts the API now
+        // takes. Middle name is omitted (it's optional server-side).
+        var parts = name.Split(' ', 2);
+        return new
+        {
+            alienNumber,
+            firstName = parts[0],
+            lastName = parts.Length > 1 ? parts[1] : "Applicant",
+            dateOfBirth = "1988-03-14",
+            countryOfBirth = "Kenya",
+            nationality = "Kenyan",
+            addressLine = "1 Test St",
+            city = "Boston",
+            state = "MA",
+            postalCode = "02101",
+            email = "test@example.com",
+            phone = "(555) 555-5555",
+            lawfulPermanentResidentSince = "2016-06-01",
+        };
+    }
 
     public record LoginResponse(string AccessToken, DateTime ExpiresAt, OfficerResponse Officer);
     public record OfficerResponse(int Id, string Name, string Email, string FieldOffice);

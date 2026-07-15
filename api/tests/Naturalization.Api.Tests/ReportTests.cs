@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
+using Microsoft.Extensions.DependencyInjection;
+using Naturalization.Api.Data;
+using Naturalization.Api.Domain;
 
 namespace Naturalization.Api.Tests;
 
@@ -63,6 +66,55 @@ public class ReportTests(ApiFactory factory) : IClassFixture<ApiFactory>
         pdf.EnsureSuccessStatusCode();
         var bytes = await pdf.Content.ReadAsByteArrayAsync();
         Assert.Equal("%PDF", Encoding.ASCII.GetString(bytes, 0, 4));
+    }
+
+    [Fact]
+    public async Task Mailing_labels_require_a_token()
+    {
+        var client = factory.CreateClient();
+        var res = await client.GetAsync("/api/reports/labels.pdf");
+        Assert.Equal(HttpStatusCode.Unauthorized, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task Mailing_labels_render_a_valid_pdf_for_seeded_applicants()
+    {
+        var client = await factory.SignedInAsync();
+
+        // Seed a few applicants directly. Kept separate from the shared ReportRoutes
+        // theory: with an empty table the labels report renders a single "no
+        // applicants" page whose size the >1000-byte floor can't promise.
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<NaturalizationDbContext>();
+            for (var i = 0; i < 3; i++)
+            {
+                db.Applicants.Add(new Applicant
+                {
+                    AlienNumber = $"A7008006{i:D2}",
+                    FirstName = "Label",
+                    MiddleName = i == 0 ? "Quincy" : null,
+                    LastName = $"Recipient{i}",
+                    AddressLine = $"{100 + i} Test St",
+                    City = "Boston",
+                    State = "MA",
+                    PostalCode = "02101",
+                    DateOfBirth = new DateOnly(1988, 3, 14),
+                    LawfulPermanentResidentSince = new DateOnly(2016, 6, 1),
+                    CreatedAt = DateTime.UtcNow,
+                });
+            }
+            await db.SaveChangesAsync();
+        }
+
+        var res = await client.GetAsync("/api/reports/labels.pdf");
+        res.EnsureSuccessStatusCode();
+        Assert.Equal("application/pdf", res.Content.Headers.ContentType?.MediaType);
+
+        var bytes = await res.Content.ReadAsByteArrayAsync();
+        Assert.Equal("%PDF", Encoding.ASCII.GetString(bytes, 0, 4));
+        Assert.True(bytes.Length > 1000, $"labels produced only {bytes.Length} bytes");
+        Assert.NotNull(res.Content.Headers.ContentDisposition);
     }
 
     private record CaseResponse(int Id, string ReceiptNumber);

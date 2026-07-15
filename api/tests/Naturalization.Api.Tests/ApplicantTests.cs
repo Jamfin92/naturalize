@@ -43,7 +43,8 @@ public class ApplicantTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var updated = await client.PutAsJsonAsync($"/api/applicants/{applicant!.Id}", new
         {
             alienNumber = "A200300400",
-            fullName = "Editable Person",
+            firstName = "Editable",
+            lastName = "Person",
             dateOfBirth = "1988-03-14",
             countryOfBirth = "Kenya",
             nationality = "Kenyan",

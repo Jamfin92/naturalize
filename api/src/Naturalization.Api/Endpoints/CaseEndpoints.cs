@@ -31,9 +31,13 @@ public static class CaseEndpoints
             if (!string.IsNullOrWhiteSpace(q))
             {
                 var term = q.Trim();
+                // Match the real name columns, not the computed FullName — a
+                // [NotMapped] property can't be translated to SQL.
                 query = query.Where(c =>
                     EF.Functions.Like(c.ReceiptNumber, $"%{term}%") ||
-                    EF.Functions.Like(c.Applicant.FullName, $"%{term}%"));
+                    EF.Functions.Like(c.Applicant.FirstName, $"%{term}%") ||
+                    EF.Functions.Like(c.Applicant.MiddleName, $"%{term}%") ||
+                    EF.Functions.Like(c.Applicant.LastName, $"%{term}%"));
             }
 
             var total = await query.CountAsync();

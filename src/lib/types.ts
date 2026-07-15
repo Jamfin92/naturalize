@@ -49,6 +49,11 @@ export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number]
 export interface Applicant {
   id: number
   alienNumber: string
+  firstName: string
+  /** Optional; the API returns "" when the applicant has no middle name. */
+  middleName: string
+  lastName: string
+  /** Server-composed "First Middle Last" for display. Read-only — not sent on create/edit. */
   fullName: string
   dateOfBirth: string
   countryOfBirth: string
