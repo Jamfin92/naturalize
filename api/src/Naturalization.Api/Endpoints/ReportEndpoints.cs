@@ -78,6 +78,16 @@ public static class ReportEndpoints
         .WithSummary("Current caseload by status, with aging and the oldest pending matters.")
         .Produces(StatusCodes.Status200OK, contentType: "application/pdf");
 
+        g.MapGet("/labels.pdf", async (IReportGenerator reports, CancellationToken ct) =>
+        {
+            var pdf = await reports.MailingLabelsAsync(ct);
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            return Results.File(pdf, "application/pdf", $"mailing-labels-{today:yyyyMMdd}.pdf");
+        })
+        .WithName("MailingLabelsPdf")
+        .WithSummary("Avery 5160 mailing labels — one per active applicant, name and address.")
+        .Produces(StatusCodes.Status200OK, contentType: "application/pdf");
+
         // The /api/metrics dashboard endpoint moved to the enhancement branch with
         // the dashboard screen that consumed it. CaseMetrics itself stays — the
         // pipeline PDF above still depends on it.

@@ -27,6 +27,11 @@ public record AuditEventDto(
 public record ApplicantDto(
     int Id,
     string AlienNumber,
+    string FirstName,
+    string MiddleName,
+    string LastName,
+    // Computed "First Middle Last", kept on the DTO so the register, detail
+    // header and toasts can render one display string without re-joining parts.
     string FullName,
     DateOnly DateOfBirth,
     string CountryOfBirth,
@@ -41,14 +46,17 @@ public record ApplicantDto(
     DateTime CreatedAt)
 {
     public static ApplicantDto From(Applicant a) => new(
-        a.Id, a.AlienNumber, a.FullName, a.DateOfBirth, a.CountryOfBirth, a.Nationality,
+        a.Id, a.AlienNumber, a.FirstName, a.MiddleName ?? "", a.LastName, a.FullName,
+        a.DateOfBirth, a.CountryOfBirth, a.Nationality,
         a.AddressLine, a.City, a.State, a.PostalCode, a.Email, a.Phone,
         a.LawfulPermanentResidentSince, a.CreatedAt);
 }
 
 public record ApplicantInput(
     string AlienNumber,
-    string FullName,
+    string FirstName,
+    string? MiddleName,
+    string LastName,
     DateOnly DateOfBirth,
     string CountryOfBirth,
     string Nationality,

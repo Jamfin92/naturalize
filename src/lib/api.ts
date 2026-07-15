@@ -180,7 +180,9 @@ export const api = {
     approvals: (params: { from?: string; to?: string; fieldOffice?: string } = {}) =>
       download(`/api/reports/approvals.pdf${query(params)}`, 'approvals.pdf'),
     pipeline: () => download('/api/reports/pipeline.pdf', 'pipeline.pdf'),
+    labels: () => download('/api/reports/labels.pdf', 'mailing-labels.pdf'),
   },
 }
 
-export type ApplicantInput = Omit<Applicant, 'id' | 'createdAt'>
+// `fullName` is server-composed and read-only, so the client never sends it.
+export type ApplicantInput = Omit<Applicant, 'id' | 'createdAt' | 'fullName'>

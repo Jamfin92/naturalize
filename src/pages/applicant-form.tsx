@@ -19,7 +19,9 @@ import { ApiError, api, type ApplicantInput } from '@/lib/api'
 
 const EMPTY: ApplicantInput = {
   alienNumber: '',
-  fullName: '',
+  firstName: '',
+  middleName: '',
+  lastName: '',
   dateOfBirth: '',
   countryOfBirth: '',
   nationality: '',
@@ -53,8 +55,8 @@ export function ApplicantFormPage() {
       .get(Number(id))
       .then((a) => {
         if (cancelled) return
-        // Drop the server-owned fields; the rest of the shape is the form's.
-        const { id: _id, createdAt: _createdAt, ...rest } = a
+        // Drop the server-owned/computed fields; the rest of the shape is the form's.
+        const { id: _id, createdAt: _createdAt, fullName: _fullName, ...rest } = a
         setForm(rest)
       })
       .catch((e: unknown) => {
@@ -141,14 +143,33 @@ export function ApplicantFormPage() {
           </CardHeader>
 
           <CardContent className="grid gap-5 @2xl:grid-cols-2">
-            <Field
-              id="fullName"
-              label="Full name"
-              value={form.fullName}
-              onChange={set('fullName')}
-              error={errors.fullName}
-              required
-            />
+            <div className="@2xl:col-span-2">
+              <div className="grid gap-5 @xl:grid-cols-3">
+                <Field
+                  id="firstName"
+                  label="First name"
+                  value={form.firstName}
+                  onChange={set('firstName')}
+                  error={errors.firstName}
+                  required
+                />
+                <Field
+                  id="middleName"
+                  label="Middle name"
+                  value={form.middleName}
+                  onChange={set('middleName')}
+                  error={errors.middleName}
+                />
+                <Field
+                  id="lastName"
+                  label="Last name"
+                  value={form.lastName}
+                  onChange={set('lastName')}
+                  error={errors.lastName}
+                  required
+                />
+              </div>
+            </div>
             <Field
               id="alienNumber"
               label="A-Number"

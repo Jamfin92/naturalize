@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Download, FileBarChart, FileSpreadsheet, FileText } from 'lucide-react'
+import { Download, FileBarChart, FileSpreadsheet, FileText, Tags } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { PageHeader } from '@/components/page'
@@ -171,6 +171,13 @@ export function ReportsPage() {
             </p>
           </div>
         </ReportCard>
+
+        <ReportCard
+          icon={Tags}
+          title="Mailing labels"
+          description="Avery 5160 address labels (30 per sheet) — one per active applicant, with name and mailing address."
+          onDownload={() => api.reports.labels()}
+        />
       </div>
     </>
   )

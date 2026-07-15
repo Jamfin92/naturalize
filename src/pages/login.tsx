@@ -102,9 +102,9 @@ export function LoginPage() {
               Every case is a person waiting to become a citizen.
             </h1>
             <p className="text-muted-foreground max-w-prose leading-relaxed text-pretty">
-              Naturalize is an open-source records system for tracking N-400 applicants from filing
-              through the oath of allegiance — the interviews, the evidence, the decisions, and the
-              audit trail behind each one.
+              Naturalize is an open-source records system for a naturalization caseworker — keep a
+              register of N-400 applicants, preserve every change as an audit trail, and print what
+              the office needs, from case records to mailing labels.
             </p>
           </div>
 

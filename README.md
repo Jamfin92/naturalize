@@ -20,7 +20,7 @@ see [Scope](#scope).
 | **Frontend** | Vite 8 · React 19 · TypeScript · Tailwind v4 · shadcn/ui · React Router 7 |
 | **Backend** | ASP.NET Core 8 minimal APIs · EF Core 8 (migrations) · SQLite |
 | **Auth** | Local JWT forms auth (HS256), with a dormant Okta carve-out |
-| **Reports** | PDFsharp + MigraDoc (MIT) — three server-rendered PDFs with embedded fonts |
+| **Reports** | PDFsharp + MigraDoc (MIT) — four server-rendered PDFs with embedded fonts |
 | **Tests** | xUnit integration tests over the real host · Playwright end-to-end |
 | **Licence** | MIT |
 
@@ -28,8 +28,9 @@ see [Scope](#scope).
   that keeps the record and its audit trail), with restore.
 - **Record history** — every change to a record, and the officer who made it, taken from their bearer
   token. Append-only: withdrawing a record adds to this trail rather than erasing it.
-- **Reports** — Case Record, Approvals (per-office approval rates), and Pipeline (caseload by status,
-  plus aging), each rendered server-side as a PDF with embedded fonts.
+- **Reports** — Case Record, Approvals (per-office approval rates), Pipeline (caseload by status,
+  plus aging), and Mailing labels (Avery 5160 address labels, one per active applicant), each rendered
+  server-side as a PDF with embedded fonts.
 
 ## Running it
 
@@ -189,9 +190,9 @@ GET    /api/applicants/{id}                     PUT    /api/applicants/{id}
 DELETE /api/applicants/{id}   <- soft delete    POST   /api/applicants/{id}/restore
 GET    /api/applicants/{id}/cases               GET    /api/applicants/{id}/history
 
-GET    /api/reports/case/{id}.pdf
+GET    /api/reports/case/{id}.pdf                GET    /api/reports/pipeline.pdf
 GET    /api/reports/approvals.pdf?from=&to=&fieldOffice=
-GET    /api/reports/pipeline.pdf
+GET    /api/reports/labels.pdf   <- Avery 5160 mailing labels
 ```
 
 ## Tests

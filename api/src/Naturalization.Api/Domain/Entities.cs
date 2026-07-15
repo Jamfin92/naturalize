@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace Naturalization.Api.Domain;
 
 /// <summary>
@@ -22,7 +24,25 @@ public class Applicant : ISoftDeletable
     /// <summary>USCIS alien registration number, e.g. "A123456789".</summary>
     public string AlienNumber { get; set; } = "";
 
-    public string FullName { get; set; } = "";
+    public string FirstName { get; set; } = "";
+
+    /// <summary>Optional. Absent for the many applicants who have no middle name.</summary>
+    public string? MiddleName { get; set; }
+    public string LastName { get; set; } = "";
+
+    /// <summary>
+    /// Display name, "First Middle Last" with blanks skipped. Computed, not a
+    /// column: [NotMapped] keeps EF from treating this get-only property as a
+    /// mapped field (which would fail materialization). Every read site — the
+    /// reports, the audit summaries, the DTO mappers — reads this, so splitting
+    /// the stored name into parts left them untouched. The only reads that must
+    /// use the real columns are the SQL-translated ones (search LIKE, OrderBy).
+    /// </summary>
+    [NotMapped]
+    public string FullName =>
+        string.Join(" ", new[] { FirstName, MiddleName, LastName }
+            .Where(p => !string.IsNullOrWhiteSpace(p)));
+
     public DateOnly DateOfBirth { get; set; }
     public string CountryOfBirth { get; set; } = "";
     public string Nationality { get; set; } = "";
