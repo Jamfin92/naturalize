@@ -102,10 +102,17 @@ public static class DbInitializer
     /// </summary>
     public const string DemoPassword = "Naturalize!Demo1";
 
-    private static readonly (string Email, string Name, string Office)[] Officers =
+    /*
+     * One demo officer per role, so the role gating is something you can actually
+     * sign in and exercise rather than take on faith: the Admin can do everything,
+     * the Officer can add and edit applicants but not withdraw them, and the
+     * Viewer can only read. Every account shares the public demo password.
+     */
+    private static readonly (string Email, string Name, string Office, OfficerRole Role)[] Officers =
     [
-        ("a.hernandez@example.gov", "A. Hernandez", "Boston, MA"),
-        ("m.whitfield@example.gov", "M. Whitfield", "Hartford, CT"),
+        ("a.hernandez@example.gov", "A. Hernandez", "Boston, MA", OfficerRole.Admin),
+        ("m.whitfield@example.gov", "M. Whitfield", "Hartford, CT", OfficerRole.Officer),
+        ("r.okafor@example.gov", "R. Okafor", "Providence, RI", OfficerRole.Viewer),
     ];
 
     public static async Task SeedOfficersAsync(
@@ -113,13 +120,14 @@ public static class DbInitializer
     {
         if (await db.Officers.AnyAsync()) return;
 
-        foreach (var (email, name, office) in Officers)
+        foreach (var (email, name, office, role) in Officers)
         {
             var officer = new OfficerAccount
             {
                 Email = email,
                 FullName = name,
                 FieldOffice = office,
+                Role = role,
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow,
             };

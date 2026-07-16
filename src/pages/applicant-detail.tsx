@@ -24,6 +24,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { api } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
+import { canManageApplicants, canWithdrawApplicants } from '@/lib/types'
 import { useAsync } from '@/lib/use-async'
 
 function Field({ label, value }: { label: string; value: string }) {
@@ -39,6 +41,7 @@ export function ApplicantDetailPage() {
   const { id } = useParams<{ id: string }>()
   const applicantId = Number(id)
   const navigate = useNavigate()
+  const { officer } = useAuth()
 
   const [confirming, setConfirming] = useState(false)
   const [withdrawing, setWithdrawing] = useState(false)
@@ -85,16 +88,20 @@ export function ApplicantDetailPage() {
                 All applicants
               </Link>
             </Button>
-            <Button variant="outline" size="sm" asChild>
-              <Link to={`/applicants/${applicantId}/edit`}>
-                <Pencil className="size-4" />
-                Edit
-              </Link>
-            </Button>
-            <Button variant="destructive" size="sm" onClick={() => setConfirming(true)}>
-              <Trash2 className="size-4" />
-              Withdraw
-            </Button>
+            {canManageApplicants(officer) && (
+              <Button variant="outline" size="sm" asChild>
+                <Link to={`/applicants/${applicantId}/edit`}>
+                  <Pencil className="size-4" />
+                  Edit
+                </Link>
+              </Button>
+            )}
+            {canWithdrawApplicants(officer) && (
+              <Button variant="destructive" size="sm" onClick={() => setConfirming(true)}>
+                <Trash2 className="size-4" />
+                Withdraw
+              </Button>
+            )}
           </div>
         }
       />

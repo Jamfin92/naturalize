@@ -5,13 +5,19 @@ import { expect, test, type Page } from '@playwright/test'
  * fabricated; see api/src/Naturalization.Api/Data/DbInitializer.cs.
  */
 const OFFICER = { email: 'a.hernandez@example.gov', password: 'Naturalize!Demo1' }
+// The seeded read-only account. Same public demo password as everyone else.
+const VIEWER = { email: 'r.okafor@example.gov', password: 'Naturalize!Demo1' }
 
-async function signIn(page: Page) {
+async function signInAs(page: Page, creds: { email: string; password: string }) {
   await page.goto('/')
-  await page.getByLabel('Work email').fill(OFFICER.email)
-  await page.getByLabel('Password').fill(OFFICER.password)
+  await page.getByLabel('Work email').fill(creds.email)
+  await page.getByLabel('Password').fill(creds.password)
   await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(page.getByRole('link', { name: 'Applicants' })).toBeVisible()
+}
+
+async function signIn(page: Page) {
+  await signInAs(page, OFFICER)
 }
 
 /** A unique A-Number per test, so runs don't collide on the unique index. */
@@ -151,6 +157,35 @@ test.describe('applicants', () => {
     await page.getByRole('button', { name: 'Add applicant' }).click()
 
     await expect(page.getByText(/belongs to withdrawn applicant/)).toBeVisible()
+  })
+})
+
+test.describe('roles', () => {
+  test('a read-only viewer is not offered add, edit or withdraw', async ({ page }) => {
+    await signInAs(page, VIEWER)
+    await page.goto('/applicants')
+
+    // The register is readable...
+    await expect(page.getByRole('heading', { name: 'Applicants' })).toBeVisible()
+    // ...but there is no way to add a record.
+    await expect(page.getByRole('link', { name: 'New applicant' })).toHaveCount(0)
+
+    // Open the first applicant.
+    await page.locator('table tbody tr').first().getByRole('link').first().click()
+    await expect(page.getByRole('heading', { name: 'Personal particulars' })).toBeVisible()
+
+    // Neither Edit nor Withdraw is offered to a viewer.
+    await expect(page.getByRole('link', { name: 'Edit' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Withdraw' })).toHaveCount(0)
+  })
+
+  test('the edit route is blocked for a viewer even by direct URL', async ({ page }) => {
+    await signInAs(page, VIEWER)
+    await page.goto('/applicants/1/edit')
+
+    await expect(page.getByRole('heading', { name: 'Not permitted' })).toBeVisible()
+    // The form itself is not rendered.
+    await expect(page.getByRole('button', { name: 'Save changes' })).toHaveCount(0)
   })
 })
 
