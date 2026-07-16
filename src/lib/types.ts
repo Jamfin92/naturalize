@@ -13,21 +13,36 @@ export interface Officer {
   name: string
   email: string
   fieldOffice: string
-  role: OfficerRole
+  /**
+   * Optional on purpose. An API older than this build simply won't send it, and
+   * the permission helpers below fail OPEN in that case rather than stripping
+   * every management action out of the UI. The server's 403 is the real gate.
+   */
+  role?: OfficerRole
 }
 
 /**
  * Can this officer create or edit applicant records? Officer and Admin can; a
- * read-only Viewer cannot. The API enforces the same rule (a 403), so this is
- * about not offering an action that would only fail — not about security.
+ * read-only Viewer cannot.
+ *
+ * These helpers are a convenience — "don't offer an action that would only 403"
+ * — NOT a security boundary; the API enforces the rule regardless. So when the
+ * role is unknown (an officer object from an API that predates roles) we fail
+ * OPEN: show the action and let the server decide. Hiding it would mean a
+ * frontend one deploy ahead of its API silently loses the ability to edit
+ * anything, which is precisely the trap the first cut of this fell into.
  */
 export function canManageApplicants(officer: Officer | null): boolean {
-  return officer?.role === 'Officer' || officer?.role === 'Admin'
+  if (!officer) return false
+  if (!officer.role) return true
+  return officer.role === 'Officer' || officer.role === 'Admin'
 }
 
-/** Can this officer withdraw or restore a record? Admin only. */
+/** Can this officer withdraw or restore a record? Admin only (fails open on unknown role). */
 export function canWithdrawApplicants(officer: Officer | null): boolean {
-  return officer?.role === 'Admin'
+  if (!officer) return false
+  if (!officer.role) return true
+  return officer.role === 'Admin'
 }
 
 /**
