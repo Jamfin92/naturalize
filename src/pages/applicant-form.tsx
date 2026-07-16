@@ -9,6 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ApiError, api, type ApplicantInput } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
+import { canManageApplicants } from '@/lib/types'
 
 /*
  * Add and edit an applicant. One component, two routes (/applicants/new and
@@ -40,7 +42,9 @@ type FieldErrors = Partial<Record<keyof ApplicantInput, string>>
 export function ApplicantFormPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { officer } = useAuth()
   const editing = id !== undefined
+  const allowed = canManageApplicants(officer)
 
   const [form, setForm] = useState<ApplicantInput>(EMPTY)
   const [errors, setErrors] = useState<FieldErrors>({})
@@ -97,7 +101,9 @@ export function ApplicantFormPage() {
        * rather than create a duplicate person. Surfacing the server's message
        * verbatim is right here — it names the record and says what to do.
        */
-      if (e instanceof ApiError && e.status === 409) {
+      if (e instanceof ApiError && e.status === 403) {
+        toast.error('Your role does not permit changing applicant records.')
+      } else if (e instanceof ApiError && e.status === 409) {
         setErrors({ alienNumber: e.message })
         toast.error('That A-Number is already on file.')
       } else if (e instanceof ApiError && Object.keys(e.fields).length > 0) {
@@ -113,6 +119,26 @@ export function ApplicantFormPage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  // A read-only Viewer can reach this route by typing the URL even though the
+  // Edit / New buttons are hidden for them. Block it here too — the API would
+  // return a 403 on save anyway, so there is nothing to gain from the form.
+  if (!allowed) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-6">
+        <PageHeader
+          title="Not permitted"
+          description="Your role can view applicant records but not change them."
+          actions={
+            <Button variant="ghost" onClick={() => navigate(-1)}>
+              <ArrowLeft className="size-4" />
+              Back
+            </Button>
+          }
+        />
+      </div>
+    )
   }
 
   if (loading) {
