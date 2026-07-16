@@ -115,7 +115,7 @@ export function AppShell() {
                 {officer.name}
               </div>
               <div className="text-muted-foreground truncate text-[11px]">
-                {officer.fieldOffice}
+                {officer.fieldOffice} · {officer.role}
               </div>
             </div>
           )}

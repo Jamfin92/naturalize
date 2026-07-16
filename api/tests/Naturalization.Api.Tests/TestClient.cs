@@ -6,26 +6,38 @@ namespace Naturalization.Api.Tests;
 /// <summary>Helpers for talking to the API the way the SPA does.</summary>
 public static class TestClient
 {
-    // The demo officer seeded by DbInitializer.SeedOfficersAsync — always present,
-    // because officer seeding is infrastructure and runs even with Seed:Demo off.
-    public const string OfficerEmail = "a.hernandez@example.gov";
+    // The demo officers seeded by DbInitializer.SeedOfficersAsync — always
+    // present, because officer seeding is infrastructure and runs even with
+    // Seed:Demo off. One per role, so the authorization tests can sign in as each.
+    public const string OfficerEmail = "a.hernandez@example.gov";   // Admin
     public const string OfficerName = "A. Hernandez";
     public const string OfficerPassword = "Naturalize!Demo1";
 
-    /// <summary>Sign in and return a client that carries the bearer token.</summary>
-    public static async Task<HttpClient> SignedInAsync(this ApiFactory factory)
+    public const string AdminEmail = "a.hernandez@example.gov";
+    public const string PlainOfficerEmail = "m.whitfield@example.gov";
+    public const string ViewerEmail = "r.okafor@example.gov";
+    // Every seeded demo account shares the one public demo password.
+    public const string DemoPassword = OfficerPassword;
+
+    /// <summary>Sign in as the default Admin officer and carry the bearer token.</summary>
+    public static Task<HttpClient> SignedInAsync(this ApiFactory factory) =>
+        factory.SignedInAsAsync(OfficerEmail);
+
+    /// <summary>Sign in as a specific seeded officer and carry the bearer token.</summary>
+    public static async Task<HttpClient> SignedInAsAsync(this ApiFactory factory, string email)
     {
         var client = factory.CreateClient();
-        var token = await factory.TokenAsync(client);
+        var token = await factory.TokenAsync(client, email);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;
     }
 
-    public static async Task<string> TokenAsync(this ApiFactory factory, HttpClient? client = null)
+    public static async Task<string> TokenAsync(
+        this ApiFactory factory, HttpClient? client = null, string email = OfficerEmail)
     {
         client ??= factory.CreateClient();
         var res = await client.PostAsJsonAsync("/api/auth/login",
-            new { email = OfficerEmail, password = OfficerPassword });
+            new { email, password = DemoPassword });
         res.EnsureSuccessStatusCode();
 
         var body = await res.Content.ReadFromJsonAsync<LoginResponse>();
@@ -56,7 +68,7 @@ public static class TestClient
     }
 
     public record LoginResponse(string AccessToken, DateTime ExpiresAt, OfficerResponse Officer);
-    public record OfficerResponse(int Id, string Name, string Email, string FieldOffice);
+    public record OfficerResponse(int Id, string Name, string Email, string FieldOffice, string Role);
     public record ApplicantResponse(int Id, string AlienNumber, string FullName);
     public record AuditEventResponse(int Id, string Action, string Actor, string Summary);
 }

@@ -159,6 +159,11 @@ public class NaturalizationDbContext(DbContextOptions<NaturalizationDbContext> o
             e.HasIndex(x => x.Email).IsUnique();
             e.Property(x => x.FullName).HasMaxLength(200).IsRequired();
             e.Property(x => x.FieldOffice).HasMaxLength(100);
+
+            // Stored as text, like every other enum in the model: readable in the
+            // database and safe against members being reordered.
+            e.Property(x => x.Role).HasConversion<string>().HasMaxLength(16).IsRequired();
+
             e.Property(x => x.PasswordHash).HasMaxLength(256).IsRequired();
         });
     }

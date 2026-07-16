@@ -50,9 +50,10 @@ dotnet run --project api/src/Naturalization.Api   # API   → http://localhost:5
 npm run dev                                        # front → http://localhost:5173
 ```
 
-Sign in with **`a.hernandez@example.gov`** / **`Naturalize!Demo1`**. The seeded database contains 40
-fabricated applicants across every case status, so the register and every report have something to
-show.
+Sign in with **`a.hernandez@example.gov`** / **`Naturalize!Demo1`** (an Admin — see the demo officer
+table under [Authentication](#authentication) for the Officer and Viewer accounts). The seeded
+database contains 40 fabricated applicants across every case status, so the register and every
+report have something to show.
 
 > **Upgrading from an older checkout?** The pre-migrations builds used `EnsureCreated`, which leaves a
 > `naturalization.db` with no migrations-history table. `MigrateAsync()` will then try to create
@@ -67,12 +68,20 @@ requires it. The officer identity in the token is what gets written into the aud
 every change — so it comes from the token, never from the request body. (An earlier build let the
 client name its own actor, which meant the trail could be signed with anyone's name.)
 
-**Demo officers** (seeded, passwords public because every applicant is fabricated):
+**Demo officers** (seeded, passwords public because every applicant is fabricated). One per role,
+so you can sign in and see the difference:
 
-| Email | Password | Field office |
-|---|---|---|
-| `a.hernandez@example.gov` | `Naturalize!Demo1` | Boston, MA |
-| `m.whitfield@example.gov` | `Naturalize!Demo1` | Hartford, CT |
+| Email | Password | Field office | Role |
+|---|---|---|---|
+| `a.hernandez@example.gov` | `Naturalize!Demo1` | Boston, MA | Admin |
+| `m.whitfield@example.gov` | `Naturalize!Demo1` | Hartford, CT | Officer |
+| `r.okafor@example.gov` | `Naturalize!Demo1` | Providence, RI | Viewer |
+
+**Roles** gate what an officer may do with applicant records. A **Viewer** can read the register,
+cases, reports and history but change nothing; an **Officer** can additionally add and edit
+applicants; an **Admin** can also withdraw and restore records. The API enforces this with
+authorization policies (a disallowed action is a `403`), and the frontend hides the actions a role
+cannot take. The role rides in the bearer token's `role` claim.
 
 **A real signing key** is required in any non-development run — startup validates it and refuses to
 boot without one. Generate one and pass it through the environment; never commit it:
@@ -203,9 +212,11 @@ npx playwright test                  # end-to-end: a real browser -> SPA -> API 
 ```
 
 The xUnit suite covers auth (including that unknown-email and wrong-password return the *same* 401),
-the token-derived audit actor, soft-delete preservation, restore, and the 409-not-500 A-Number
-collision. Playwright drives the real app: unauthenticated redirect, a rejected password, add, edit,
-that withdrawing a record keeps its trail, and that all three PDFs actually download behind auth.
+the token-derived audit actor, soft-delete preservation, restore, the 409-not-500 A-Number
+collision, and the role gates (a Viewer is `403`ed from every mutation; an Officer can edit but not
+withdraw). Playwright drives the real app: unauthenticated redirect, a rejected password, add, edit,
+that a Viewer is offered none of those actions, that withdrawing a record keeps its trail, and that
+all three PDFs actually download behind auth.
 
 ## Before you deploy this
 
@@ -213,8 +224,9 @@ It is a reference implementation. To hold real records it still needs, at minimu
 
 - **A real signing key and a real identity provider.** Set `Auth__Jwt__Key` from a secret store, and
   either replace the seeded officer accounts or turn on the Okta path (and build the frontend OIDC
-  flow it needs). There are **no refresh tokens** and **no roles** — anyone who can sign in has the
-  same access — and a deactivated account keeps working until its token expires.
+  flow it needs). There are **no refresh tokens**, and a deactivated account keeps working until its
+  token expires. Roles exist (Viewer / Officer / Admin) and gate applicant changes, but they are
+  coarse — a real deployment will likely want finer-grained, per-field-office authorisation.
 - **Real document storage.** `EvidenceDocument` registers *metadata only* and never accepts file
   bytes. Accepting immigration evidence means virus scanning, content-type sniffing, encryption at
   rest, a retention policy and access logging — choices a deployer must make.
@@ -225,8 +237,9 @@ It is a reference implementation. To hold real records it still needs, at minimu
 
 ### Known limitations
 
-- **No roles.** Authorisation is out of scope on both branches; a half-built role system reads as a
-  real one, so there isn't one.
+- **Coarse roles.** Authorisation is three fixed roles (Viewer / Officer / Admin) gating applicant
+  changes. There is no per-field-office scoping, no case-level authorisation, and no UI to manage an
+  officer's role — a role is set when the account is seeded.
 - **SQLite migrations** rebuild a table to drop or alter a column — review any generated migration,
   because anything not in the EF model (hand-added triggers, indexes) is lost in the rebuild.
 - On the enhancement branch, a *Continued* decision leaves a case blocked from ever being decided

@@ -4,9 +4,10 @@ namespace Naturalization.Api.Dtos;
 
 public record LoginInput(string Email, string Password);
 
-public record OfficerDto(int Id, string Name, string Email, string FieldOffice)
+public record OfficerDto(int Id, string Name, string Email, string FieldOffice, string Role)
 {
-    public static OfficerDto From(OfficerAccount o) => new(o.Id, o.FullName, o.Email, o.FieldOffice);
+    public static OfficerDto From(OfficerAccount o) =>
+        new(o.Id, o.FullName, o.Email, o.FieldOffice, o.Role.ToString());
 }
 
 public record LoginResult(string AccessToken, DateTime ExpiresAt, OfficerDto Officer);

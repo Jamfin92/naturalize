@@ -36,6 +36,10 @@ public class TokenIssuer(IOptions<JwtOptions> options)
                 ["email"] = officer.Email,
                 ["name"] = officer.FullName,
                 ["field_office"] = officer.FieldOffice,
+                // The local bearer scheme's RoleClaimType is "role", so this is
+                // what RequireRole (and ClaimsPrincipal.IsInRole) reads. See
+                // Auth/Policies.cs and AuthExtensions.
+                ["role"] = officer.Role.ToString(),
             },
         });
 

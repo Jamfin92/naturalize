@@ -157,6 +157,7 @@ public static class ApplicantEndpoints
 
             return TypedResults.Created($"/api/applicants/{a.Id}", ApplicantDto.From(a));
         })
+        .RequireAuthorization(Policies.ManageApplicants)
         .WithName("CreateApplicant");
 
         g.MapPut("/{id:int}", async Task<Results<Ok<ApplicantDto>, NotFound, ValidationProblem, Conflict<string>>> (
@@ -206,6 +207,7 @@ public static class ApplicantEndpoints
             await db.SaveChangesAsync();
             return TypedResults.Ok(ApplicantDto.From(a));
         })
+        .RequireAuthorization(Policies.ManageApplicants)
         .WithName("UpdateApplicant");
 
         g.MapDelete("/{id:int}", async Task<Results<NoContent, NotFound>> (
@@ -239,6 +241,7 @@ public static class ApplicantEndpoints
             await db.SaveChangesAsync();
             return TypedResults.NoContent();
         })
+        .RequireAuthorization(Policies.WithdrawApplicants)
         .WithName("DeleteApplicant")
         .WithSummary("Withdraw an applicant from the register. Soft delete: nothing is destroyed.");
 
@@ -262,6 +265,7 @@ public static class ApplicantEndpoints
 
             return TypedResults.Ok(ApplicantDto.From(a));
         })
+        .RequireAuthorization(Policies.WithdrawApplicants)
         .WithName("RestoreApplicant")
         .WithSummary("Return a withdrawn applicant to the active register.");
     }

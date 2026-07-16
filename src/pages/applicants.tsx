@@ -15,11 +15,14 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { api } from '@/lib/api'
+import { useAuth } from '@/lib/auth'
+import { canManageApplicants } from '@/lib/types'
 import { useAsync } from '@/lib/use-async'
 
 const PAGE_SIZE = 15
 
 export function ApplicantsPage() {
+  const { officer } = useAuth()
   const [q, setQ] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -59,12 +62,14 @@ export function ApplicantsPage() {
               </Button>
             </form>
 
-            <Button asChild>
-              <Link to="/applicants/new">
-                <Plus className="size-4" />
-                New applicant
-              </Link>
-            </Button>
+            {canManageApplicants(officer) && (
+              <Button asChild>
+                <Link to="/applicants/new">
+                  <Plus className="size-4" />
+                  New applicant
+                </Link>
+              </Button>
+            )}
           </div>
         }
       />

@@ -1,11 +1,33 @@
 /** Mirrors the C# domain in api/src/Naturalization.Api/Domain. Keep in sync. */
 
+/**
+ * What an officer is allowed to do. Mirrors the C# OfficerRole enum. Viewer is
+ * read-only, Officer can add and edit applicants, Admin can additionally
+ * withdraw and restore records.
+ */
+export type OfficerRole = 'Viewer' | 'Officer' | 'Admin'
+
 /** The signed-in caseworker, as resolved by the API from the bearer token. */
 export interface Officer {
   id: number
   name: string
   email: string
   fieldOffice: string
+  role: OfficerRole
+}
+
+/**
+ * Can this officer create or edit applicant records? Officer and Admin can; a
+ * read-only Viewer cannot. The API enforces the same rule (a 403), so this is
+ * about not offering an action that would only fail — not about security.
+ */
+export function canManageApplicants(officer: Officer | null): boolean {
+  return officer?.role === 'Officer' || officer?.role === 'Admin'
+}
+
+/** Can this officer withdraw or restore a record? Admin only. */
+export function canWithdrawApplicants(officer: Officer | null): boolean {
+  return officer?.role === 'Admin'
 }
 
 /**
