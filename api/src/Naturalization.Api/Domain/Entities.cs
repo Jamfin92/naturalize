@@ -201,8 +201,13 @@ public class AuditEvent
 }
 
 /// <summary>
-/// A caseworker who can sign in. Deliberately has NO role column: authorisation
-/// is out of scope, and a half-built role system reads as a real one.
+/// A caseworker who can sign in.
+///
+/// Carries a <see cref="Role"/>: authorisation is no longer a stub. The role is
+/// stamped into the bearer token (see Auth/TokenIssuer) and enforced by the
+/// applicant endpoints through the policies in Auth/Policies.cs — a Viewer can
+/// read but not change records, an Officer can create and update them, and an
+/// Admin can additionally withdraw and restore.
 /// </summary>
 public class OfficerAccount
 {
@@ -211,6 +216,13 @@ public class OfficerAccount
     public string Email { get; set; } = "";
     public string FullName { get; set; } = "";
     public string FieldOffice { get; set; } = "";
+
+    /// <summary>
+    /// What this officer may do. Defaults to <see cref="OfficerRole.Officer"/> —
+    /// the everyday caseworker level — so a hand-inserted account without an
+    /// explicit role can still do its job but cannot withdraw records.
+    /// </summary>
+    public OfficerRole Role { get; set; } = OfficerRole.Officer;
 
     /// <summary>PBKDF2, via ASP.NET's <c>IPasswordHasher</c>. Never a plaintext password.</summary>
     public string PasswordHash { get; set; } = "";

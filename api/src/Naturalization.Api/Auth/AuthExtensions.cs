@@ -158,7 +158,9 @@ public static class AuthExtensions
             });
         }
 
-        services.AddAuthorization();
+        // Role-gated policies for the applicant mutations. Read endpoints keep the
+        // bare authenticated requirement; see Auth/Policies.cs.
+        services.AddAuthorizationBuilder().AddNaturalizePolicies();
         return services;
     }
 }
