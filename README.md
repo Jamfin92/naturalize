@@ -192,7 +192,7 @@ GET    /api/applicants/{id}/cases               GET    /api/applicants/{id}/hist
 
 GET    /api/reports/case/{id}.pdf                GET    /api/reports/pipeline.pdf
 GET    /api/reports/approvals.pdf?from=&to=&fieldOffice=
-GET    /api/reports/labels.pdf   <- Avery 5160 mailing labels
+GET    /api/reports/labels.pdf?from=&to=   <- Avery 5160 labels; from/to filter by date added
 ```
 
 ## Tests

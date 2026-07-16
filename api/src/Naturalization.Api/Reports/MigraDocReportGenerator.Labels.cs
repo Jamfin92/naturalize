@@ -17,7 +17,8 @@ namespace Naturalization.Api.Reports;
 /// </summary>
 public partial class MigraDocReportGenerator
 {
-    public async Task<byte[]> MailingLabelsAsync(CancellationToken ct = default)
+    public async Task<byte[]> MailingLabelsAsync(
+        DateOnly? from = null, DateOnly? to = null, CancellationToken ct = default)
     {
         // The raw PdfDocument path never touches ReportTheme.NewDocument, which is
         // what normally installs the resolver — so do it here, or the first XFont
@@ -25,8 +26,26 @@ public partial class MigraDocReportGenerator
         EmbeddedFontResolver.EnsureInstalled();
 
         // Live applicants only; the global soft-delete query filter already excludes
-        // withdrawn records. Ordered as you'd sort a stack of labels.
-        var people = await db.Applicants.AsNoTracking()
+        // withdrawn records.
+        var query = db.Applicants.AsNoTracking();
+
+        // Restrict to when the record was added (CreatedAt). CreatedAt is a DateTime,
+        // so compare against day boundaries rather than DateOnly.FromDateTime(...) —
+        // the latter doesn't translate to SQL. 'to' is inclusive of its whole day, so
+        // a single date (from == to) captures everything added that calendar day.
+        if (from is DateOnly f)
+        {
+            var fromDt = f.ToDateTime(TimeOnly.MinValue);
+            query = query.Where(a => a.CreatedAt >= fromDt);
+        }
+        if (to is DateOnly t)
+        {
+            var toExclusive = t.AddDays(1).ToDateTime(TimeOnly.MinValue);
+            query = query.Where(a => a.CreatedAt < toExclusive);
+        }
+
+        // Ordered as you'd sort a stack of labels.
+        var people = await query
             .OrderBy(a => a.LastName)
             .ThenBy(a => a.FirstName)
             .ToListAsync(ct);
@@ -59,7 +78,12 @@ public partial class MigraDocReportGenerator
             page.Size = PageSize.Letter;
             using var g = XGraphics.FromPdfPage(page);
             var note = new XFont(EmbeddedFontResolver.Sans, 12, XFontStyleEx.Regular);
-            g.DrawString("No applicants to print.", note, ink,
+            var message = (from, to) switch
+            {
+                (null, null) => "No applicants to print.",
+                _ => "No applicants added in the selected date range.",
+            };
+            g.DrawString(message, note, ink,
                 new XRect(0, 0, page.Width.Point, page.Height.Point), XStringFormats.Center);
             return RenderRaw(doc);
         }
