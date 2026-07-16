@@ -21,6 +21,11 @@ public interface IReportGenerator
     /// <summary>Current caseload by status, with aging and the oldest pending matters.</summary>
     Task<byte[]> PipelineAsync(CancellationToken ct = default);
 
-    /// <summary>One mailing label per active applicant, laid out for Avery 5160 label sheets.</summary>
-    Task<byte[]> MailingLabelsAsync(CancellationToken ct = default);
+    /// <summary>
+    /// One mailing label per active applicant, laid out for Avery 5160 label sheets.
+    /// Optionally restricted to applicants added within a date range (on their
+    /// <c>CreatedAt</c> day): pass the same day as both bounds for a single date, one
+    /// bound for an open-ended range, or neither for every active applicant.
+    /// </summary>
+    Task<byte[]> MailingLabelsAsync(DateOnly? from = null, DateOnly? to = null, CancellationToken ct = default);
 }

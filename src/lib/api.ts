@@ -180,7 +180,8 @@ export const api = {
     approvals: (params: { from?: string; to?: string; fieldOffice?: string } = {}) =>
       download(`/api/reports/approvals.pdf${query(params)}`, 'approvals.pdf'),
     pipeline: () => download('/api/reports/pipeline.pdf', 'pipeline.pdf'),
-    labels: () => download('/api/reports/labels.pdf', 'mailing-labels.pdf'),
+    labels: (params: { from?: string; to?: string } = {}) =>
+      download(`/api/reports/labels.pdf${query(params)}`, 'mailing-labels.pdf'),
   },
 }
 

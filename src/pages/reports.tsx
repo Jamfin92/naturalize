@@ -7,6 +7,13 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { api } from '@/lib/api'
 
 /*
@@ -87,10 +94,25 @@ export function ReportsPage() {
   const today = new Date()
   const firstOfYear = new Date(today.getFullYear(), 0, 1)
 
-  const [from, setFrom] = useState(firstOfYear.toISOString().slice(0, 10))
-  const [to, setTo] = useState(today.toISOString().slice(0, 10))
+  const iso = (d: Date) => d.toISOString().slice(0, 10)
+
+  const [from, setFrom] = useState(iso(firstOfYear))
+  const [to, setTo] = useState(iso(today))
   const [office, setOffice] = useState('')
   const [caseId, setCaseId] = useState('')
+
+  // Mailing labels can be filtered by the date an applicant was added: every
+  // active applicant (default), a single day, or a date range.
+  const [labelMode, setLabelMode] = useState<'all' | 'single' | 'range'>('all')
+  const [labelDate, setLabelDate] = useState(iso(today))
+  const [labelFrom, setLabelFrom] = useState(iso(firstOfYear))
+  const [labelTo, setLabelTo] = useState(iso(today))
+
+  const labels = () => {
+    if (labelMode === 'single') return api.reports.labels({ from: labelDate, to: labelDate })
+    if (labelMode === 'range') return api.reports.labels({ from: labelFrom, to: labelTo })
+    return api.reports.labels()
+  }
 
   return (
     <>
@@ -176,8 +198,71 @@ export function ReportsPage() {
           icon={Tags}
           title="Mailing labels"
           description="Avery 5160 address labels (30 per sheet) — one per active applicant, with name and mailing address."
-          onDownload={() => api.reports.labels()}
-        />
+          onDownload={labels}
+          disabled={labelMode === 'range' && labelFrom > labelTo}
+        >
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="labelMode" className="text-xs">
+                Applicants added
+              </Label>
+              <Select
+                value={labelMode}
+                onValueChange={(v) => setLabelMode(v as 'all' | 'single' | 'range')}
+              >
+                <SelectTrigger id="labelMode" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All active applicants</SelectItem>
+                  <SelectItem value="single">On a single date</SelectItem>
+                  <SelectItem value="range">Within a date range</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {labelMode === 'single' && (
+              <div className="space-y-1.5">
+                <Label htmlFor="labelDate" className="text-xs">
+                  Date
+                </Label>
+                <Input
+                  id="labelDate"
+                  type="date"
+                  value={labelDate}
+                  onChange={(e) => setLabelDate(e.target.value)}
+                />
+              </div>
+            )}
+
+            {labelMode === 'range' && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="labelFrom" className="text-xs">
+                    From
+                  </Label>
+                  <Input
+                    id="labelFrom"
+                    type="date"
+                    value={labelFrom}
+                    onChange={(e) => setLabelFrom(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="labelTo" className="text-xs">
+                    To
+                  </Label>
+                  <Input
+                    id="labelTo"
+                    type="date"
+                    value={labelTo}
+                    onChange={(e) => setLabelTo(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </ReportCard>
       </div>
     </>
   )
