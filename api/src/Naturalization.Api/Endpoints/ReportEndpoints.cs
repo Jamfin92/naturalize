@@ -78,14 +78,31 @@ public static class ReportEndpoints
         .WithSummary("Current caseload by status, with aging and the oldest pending matters.")
         .Produces(StatusCodes.Status200OK, contentType: "application/pdf");
 
-        g.MapGet("/labels.pdf", async (IReportGenerator reports, CancellationToken ct) =>
+        g.MapGet("/labels.pdf", async Task<IResult> (
+            IReportGenerator reports,
+            DateOnly? from,
+            DateOnly? to,
+            CancellationToken ct) =>
         {
-            var pdf = await reports.MailingLabelsAsync(ct);
+            // Both bounds optional: a single date is from == to, an open-ended range
+            // sets one, and neither prints every active applicant.
+            if (from is DateOnly f && to is DateOnly t && f > t)
+                return Results.Problem("'from' must not be after 'to'.", statusCode: 400);
+
+            var pdf = await reports.MailingLabelsAsync(from, to, ct);
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
-            return Results.File(pdf, "application/pdf", $"mailing-labels-{today:yyyyMMdd}.pdf");
+            var name = (from, to) switch
+            {
+                (DateOnly a, DateOnly b) when a == b => $"mailing-labels-{a:yyyyMMdd}.pdf",
+                (DateOnly a, DateOnly b) => $"mailing-labels-{a:yyyyMMdd}-{b:yyyyMMdd}.pdf",
+                (DateOnly a, null) => $"mailing-labels-from-{a:yyyyMMdd}.pdf",
+                (null, DateOnly b) => $"mailing-labels-to-{b:yyyyMMdd}.pdf",
+                _ => $"mailing-labels-{today:yyyyMMdd}.pdf",
+            };
+            return Results.File(pdf, "application/pdf", name);
         })
         .WithName("MailingLabelsPdf")
-        .WithSummary("Avery 5160 mailing labels — one per active applicant, name and address.")
+        .WithSummary("Avery 5160 mailing labels — one per active applicant, optionally by date added (single date or range).")
         .Produces(StatusCodes.Status200OK, contentType: "application/pdf");
 
         // The /api/metrics dashboard endpoint moved to the enhancement branch with
