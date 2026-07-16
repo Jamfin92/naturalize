@@ -5,6 +5,7 @@ import { LogOut, Moon, PanelLeftClose, PanelLeftOpen, Stamp, Sun, Users } from '
 import { UsFlag } from '@/components/flag/us-flag'
 import { useTheme } from '@/components/theme-provider'
 import { useAuth } from '@/lib/auth'
+import { normalizeRole } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -115,7 +116,7 @@ export function AppShell() {
                 {officer.name}
               </div>
               <div className="text-muted-foreground truncate text-[11px]">
-                {officer.fieldOffice} · {officer.role}
+                {officer.fieldOffice} · {normalizeRole(officer.role) ?? officer.role}
               </div>
             </div>
           )}
