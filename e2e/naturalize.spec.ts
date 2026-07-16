@@ -158,6 +158,35 @@ test.describe('applicants', () => {
 
     await expect(page.getByText(/belongs to withdrawn applicant/)).toBeVisible()
   })
+
+  test('an admin can withdraw a record straight from the register list', async ({ page }) => {
+    const aNumber = uniqueANumber()
+    await signIn(page)
+
+    // Create one to withdraw.
+    await page.goto('/applicants/new')
+    await page.getByLabel('First name').fill('Listwithdraw')
+    await page.getByLabel('Last name').fill('Person')
+    await page.getByLabel('A-Number').fill(aNumber)
+    await page.getByLabel('Date of birth').fill('1980-02-02')
+    await page.getByLabel('LPR since').fill('2013-01-01')
+    await page.getByRole('button', { name: 'Add applicant' }).click()
+    await expect(page.getByRole('heading', { name: 'Listwithdraw Person' })).toBeVisible()
+
+    // Withdraw it from the row's actions menu, WITHOUT opening the detail page —
+    // this is exactly the "select a user and modify or delete" the list now offers.
+    await page.getByRole('link', { name: 'All applicants' }).click()
+    await page.getByPlaceholder('Name or A-Number…').fill(aNumber)
+    await page.getByRole('button', { name: 'Search' }).click()
+    await expect(page.getByRole('link', { name: 'Listwithdraw Person' })).toBeVisible()
+
+    await page.getByRole('button', { name: 'Actions for Listwithdraw Person' }).click()
+    await page.getByRole('menuitem', { name: 'Withdraw record' }).click()
+    await page.getByRole('button', { name: 'Withdraw record' }).click()
+
+    // The list refreshes in place and the row is gone from the register.
+    await expect(page.getByRole('link', { name: 'Listwithdraw Person' })).toHaveCount(0)
+  })
 })
 
 test.describe('roles', () => {
@@ -167,8 +196,10 @@ test.describe('roles', () => {
 
     // The register is readable...
     await expect(page.getByRole('heading', { name: 'Applicants' })).toBeVisible()
-    // ...but there is no way to add a record.
+    // ...but there is no way to add a record...
     await expect(page.getByRole('link', { name: 'New applicant' })).toHaveCount(0)
+    // ...and no per-row actions menu to edit or withdraw from the list either.
+    await expect(page.getByRole('button', { name: /^Actions for / })).toHaveCount(0)
 
     // Open the first applicant.
     await page.locator('table tbody tr').first().getByRole('link').first().click()
