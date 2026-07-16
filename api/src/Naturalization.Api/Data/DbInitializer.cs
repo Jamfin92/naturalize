@@ -118,24 +118,59 @@ public static class DbInitializer
     public static async Task SeedOfficersAsync(
         NaturalizationDbContext db, IPasswordHasher<OfficerAccount> hasher)
     {
-        if (await db.Officers.AnyAsync()) return;
+        /*
+         * Upsert-by-email, not "bail if any officer exists".
+         *
+         * The old guard (`if (await db.Officers.AnyAsync()) return;`) made seeding
+         * all-or-nothing, which broke the one thing this demo exists to show. A
+         * database seeded BEFORE roles existed has every officer backfilled to
+         * Admin by the AddOfficerRole migration; the early return then meant the
+         * Officer and Viewer demo accounts stayed Admin forever, so the role gating
+         * could never be exercised on a reused database — you had to delete the
+         * file. This reconciles each demo officer's role to its intended value on
+         * startup instead, which is exactly what lets the roles be demoed against a
+         * database that already exists (the point of "demo before creating the db").
+         */
+        var anyExisting = await db.Officers.AnyAsync();
 
         foreach (var (email, name, office, role) in Officers)
         {
-            var officer = new OfficerAccount
-            {
-                Email = email,
-                FullName = name,
-                FieldOffice = office,
-                Role = role,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-            };
+            var officer = await db.Officers.FirstOrDefaultAsync(o => o.Email == email);
 
-            // Hashed, never stored in the clear — even for a demo account whose
-            // password is printed in the README. The habit is the point.
-            officer.PasswordHash = hasher.HashPassword(officer, DemoPassword);
-            db.Officers.Add(officer);
+            if (officer is null)
+            {
+                /*
+                 * Only introduce a demo officer on a database that has none of its
+                 * own. These accounts share one public password, so injecting them
+                 * into a deployment that has already provisioned real officers would
+                 * be handing out a backdoor — hence the guard rather than an
+                 * unconditional insert.
+                 */
+                if (anyExisting) continue;
+
+                officer = new OfficerAccount
+                {
+                    Email = email,
+                    FullName = name,
+                    FieldOffice = office,
+                    Role = role,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                };
+
+                // Hashed, never stored in the clear — even for a demo account whose
+                // password is printed in the README. The habit is the point.
+                officer.PasswordHash = hasher.HashPassword(officer, DemoPassword);
+                db.Officers.Add(officer);
+            }
+            else if (officer.Role != role)
+            {
+                // A drifted role (a pre-roles database backfilled everyone to Admin;
+                // a hand-edited row). Correct it so the gating a Viewer or Officer is
+                // supposed to demonstrate actually shows up. One UPDATE, and only
+                // when the stored role is genuinely wrong.
+                officer.Role = role;
+            }
         }
 
         await db.SaveChangesAsync();
