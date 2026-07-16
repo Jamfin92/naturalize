@@ -22,6 +22,30 @@ export interface Officer {
 }
 
 /**
+ * Canonicalise a role string coming off the wire.
+ *
+ * The API sends the C# enum name ("Admin"). This is a cross-language boundary,
+ * though, and a strict `role === 'Admin'` fails SILENTLY on any drift — a value
+ * that arrives as "admin", "ADMIN" or "Admin " renders as an Admin in the UI but
+ * matches nothing, so every action is stripped from an account the sidebar still
+ * labels Admin. (That is precisely the "chip says Admin but the buttons are gone"
+ * report.) Compare trimmed and case-insensitively; an unrecognised value returns
+ * undefined and the callers below fail OPEN, as before.
+ */
+export function normalizeRole(role: string | null | undefined): OfficerRole | undefined {
+  switch (role?.trim().toLowerCase()) {
+    case 'viewer':
+      return 'Viewer'
+    case 'officer':
+      return 'Officer'
+    case 'admin':
+      return 'Admin'
+    default:
+      return undefined
+  }
+}
+
+/**
  * Can this officer create or edit applicant records? Officer and Admin can; a
  * read-only Viewer cannot.
  *
@@ -34,15 +58,17 @@ export interface Officer {
  */
 export function canManageApplicants(officer: Officer | null): boolean {
   if (!officer) return false
-  if (!officer.role) return true
-  return officer.role === 'Officer' || officer.role === 'Admin'
+  const role = normalizeRole(officer.role)
+  if (!role) return true
+  return role === 'Officer' || role === 'Admin'
 }
 
 /** Can this officer withdraw or restore a record? Admin only (fails open on unknown role). */
 export function canWithdrawApplicants(officer: Officer | null): boolean {
   if (!officer) return false
-  if (!officer.role) return true
-  return officer.role === 'Admin'
+  const role = normalizeRole(officer.role)
+  if (!role) return true
+  return role === 'Admin'
 }
 
 /**
