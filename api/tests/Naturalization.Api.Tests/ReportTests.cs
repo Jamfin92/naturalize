@@ -141,4 +141,69 @@ public class ReportTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.True(bytes.Length > 1000, $"labels produced only {bytes.Length} bytes");
         Assert.NotNull(res.Content.Headers.ContentDisposition);
     }
+
+    [Fact]
+    public async Task Mailing_labels_filter_by_date_added_and_name_the_download()
+    {
+        var client = await factory.SignedInAsync();
+
+        // Two applicants added on distinct, fixed days so the CreatedAt filter has
+        // something to include and exclude.
+        var early = new DateTime(2026, 1, 10, 9, 0, 0, DateTimeKind.Utc);
+        var late = new DateTime(2026, 3, 20, 9, 0, 0, DateTimeKind.Utc);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<NaturalizationDbContext>();
+            db.Applicants.Add(new Applicant
+            {
+                AlienNumber = "A710000001",
+                FirstName = "Early",
+                LastName = "Arrival",
+                AddressLine = "1 Winter Way",
+                City = "Boston",
+                State = "MA",
+                PostalCode = "02101",
+                DateOfBirth = new DateOnly(1988, 3, 14),
+                LawfulPermanentResidentSince = new DateOnly(2016, 6, 1),
+                CreatedAt = early,
+            });
+            db.Applicants.Add(new Applicant
+            {
+                AlienNumber = "A710000002",
+                FirstName = "Late",
+                LastName = "Arrival",
+                AddressLine = "2 Spring St",
+                City = "Boston",
+                State = "MA",
+                PostalCode = "02101",
+                DateOfBirth = new DateOnly(1990, 5, 2),
+                LawfulPermanentResidentSince = new DateOnly(2017, 7, 1),
+                CreatedAt = late,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // A single date names the file for that day.
+        var single = await client.GetAsync("/api/reports/labels.pdf?from=2026-01-10&to=2026-01-10");
+        single.EnsureSuccessStatusCode();
+        Assert.Equal("mailing-labels-20260110.pdf", single.Content.Headers.ContentDisposition?.FileNameStar
+            ?? single.Content.Headers.ContentDisposition?.FileName?.Trim('"'));
+
+        // A range names the file for both bounds.
+        var range = await client.GetAsync("/api/reports/labels.pdf?from=2026-01-01&to=2026-02-01");
+        range.EnsureSuccessStatusCode();
+        Assert.Equal("mailing-labels-20260101-20260201.pdf",
+            range.Content.Headers.ContentDisposition?.FileNameStar
+            ?? range.Content.Headers.ContentDisposition?.FileName?.Trim('"'));
+        var rangeBytes = await range.Content.ReadAsByteArrayAsync();
+        Assert.Equal("%PDF", Encoding.ASCII.GetString(rangeBytes, 0, 4));
+    }
+
+    [Fact]
+    public async Task Mailing_labels_reject_a_backwards_range()
+    {
+        var client = await factory.SignedInAsync();
+        var res = await client.GetAsync("/api/reports/labels.pdf?from=2026-03-01&to=2026-01-01");
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+    }
 }

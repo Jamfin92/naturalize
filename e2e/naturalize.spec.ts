@@ -216,4 +216,43 @@ test.describe('reports', () => {
 
     expect(download.suggestedFilename()).toMatch(/^mailing-labels-\d{8}\.pdf$/)
   })
+
+  test('the mailing labels download for a single date', async ({ page }) => {
+    await signIn(page)
+    await page.goto('/reports')
+
+    // "From"/"To" also appear on the approvals card, so scope to the labels card —
+    // its description is the only place "Avery 5160" appears.
+    const card = page.locator('[class*="flex-col"]').filter({ hasText: 'Avery 5160' }).first()
+
+    await card.getByLabel('Applicants added').click()
+    await page.getByRole('option', { name: 'On a single date' }).click()
+    await card.getByLabel('Date').fill('2026-01-10')
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      card.getByRole('button', { name: 'Download Mailing labels' }).click(),
+    ])
+
+    expect(download.suggestedFilename()).toBe('mailing-labels-20260110.pdf')
+  })
+
+  test('the mailing labels download for a date range', async ({ page }) => {
+    await signIn(page)
+    await page.goto('/reports')
+
+    const card = page.locator('[class*="flex-col"]').filter({ hasText: 'Avery 5160' }).first()
+
+    await card.getByLabel('Applicants added').click()
+    await page.getByRole('option', { name: 'Within a date range' }).click()
+    await card.getByLabel('From').fill('2026-01-01')
+    await card.getByLabel('To').fill('2026-02-01')
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      card.getByRole('button', { name: 'Download Mailing labels' }).click(),
+    ])
+
+    expect(download.suggestedFilename()).toBe('mailing-labels-20260101-20260201.pdf')
+  })
 })
