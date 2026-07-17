@@ -11,15 +11,39 @@ using Naturalization.Api.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // --- Persistence -------------------------------------------------------------
-// SQLite: the whole database is one file, so cloning the repo and running
-// `dotnet run` gives you a working system with no container and no server.
+// SQL Server is the production database and owns the versioned migrations under
+// Data/Migrations. Supply its connection string via configuration
+// (ConnectionStrings:Default / ConnectionStrings__Default); the fallback points
+// at a local instance — the docker one in SETUP-SQLSERVER.md — so `dotnet run`
+// has a target. See that guide for going live.
+//
+// SQLite is the zero-infrastructure escape hatch: set Database:Provider=Sqlite
+// (env Database__Provider=Sqlite) to run the whole app off a single file with no
+// server. The integration tests and the Playwright e2e host use it so the suites
+// stay fast and self-contained. SQLite builds its schema from the model
+// (EnsureCreated, below) — the SQL Server-shaped migrations do not apply to it.
+var provider = builder.Configuration["Database:Provider"] ?? "SqlServer";
+var useSqlite = provider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase);
+
 var connection = builder.Configuration.GetConnectionString("Default")
-    ?? "Data Source=naturalization.db";
+    ?? (useSqlite
+        ? "Data Source=naturalization.db"
+        : "Server=localhost,1433;Database=naturalize;User Id=sa;Password=Change-me-123;TrustServerCertificate=True");
 
 // The old required-navigation-with-query-filter warning suppression went away
 // with the case/decision/evidence tables it protected: the applicant is now the
 // only soft-deletable entity, and nothing depends on it through a required FK.
-builder.Services.AddDbContext<NaturalizationDbContext>(o => o.UseSqlite(connection));
+builder.Services.AddDbContext<NaturalizationDbContext>(o =>
+{
+    if (useSqlite)
+    {
+        o.UseSqlite(connection);
+    }
+    else
+    {
+        o.UseSqlServer(connection);
+    }
+});
 
 builder.Services.AddScoped<ApplicantMetrics>();
 builder.Services.AddScoped<IReportGenerator, MigraDocReportGenerator>();
@@ -98,18 +122,32 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<NaturalizationDbContext>();
 
     /*
-     * Migrate, not EnsureCreated. EnsureCreated builds the schema from the model
-     * and then can never change it again — the first time you add a column, your
-     * only options are "drop the database" or "hand-write SQL", and neither is
-     * available to someone holding real records.
+     * SQL Server (production): Migrate, not EnsureCreated. EnsureCreated builds
+     * the schema from the model and then can never change it again — the first
+     * time you add a column, your only options are "drop the database" or
+     * "hand-write SQL", and neither is available to someone holding real records.
+     * MigrateAsync applies the versioned migrations under Data/Migrations and
+     * records them in __EFMigrationsHistory, so the schema can move forward.
      *
      * NOTE for anyone upgrading a pre-migrations checkout: an EnsureCreated
      * database has no __EFMigrationsHistory table, so Migrate() will believe
      * nothing has been applied and try to CREATE TABLE over the top of your
-     * existing tables. Delete naturalization.db (and its -wal / -shm siblings)
-     * once, and this rebuilds it.
+     * existing tables. Start migrations from an empty database (see §5 of
+     * SETUP-SQLSERVER.md).
+     *
+     * SQLite (integration tests): the migrations are SQL Server-shaped and do not
+     * translate to SQLite, and the per-run test database is thrown away, so there
+     * is nothing to migrate forward. Build the schema straight from the model
+     * with EnsureCreated. The provider is swapped in by ApiFactory, never here.
      */
-    await db.Database.MigrateAsync();
+    if (db.Database.IsSqlServer())
+    {
+        await db.Database.MigrateAsync();
+    }
+    else
+    {
+        await db.Database.EnsureCreatedAsync();
+    }
 
     // Users are infrastructure, not fixtures: a database with no account in it is
     // an API that nobody can log into. Always seeded.
