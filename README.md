@@ -18,7 +18,7 @@ see [Scope](#scope).
 | | |
 |---|---|
 | **Frontend** | Vite 8 · React 19 · TypeScript · Tailwind v4 · shadcn/ui · React Router 7 |
-| **Backend** | ASP.NET Core 8 minimal APIs · EF Core 8 (migrations) · SQLite |
+| **Backend** | ASP.NET Core 8 minimal APIs · EF Core 8 (migrations) · SQL Server (SQLite for tests and zero-setup local runs) |
 | **Auth** | Local JWT forms auth (HS256), with a dormant Okta carve-out |
 | **Reports** | PDFsharp + MigraDoc (MIT) — four server-rendered PDFs with embedded fonts |
 | **Tests** | xUnit integration tests over the real host · Playwright end-to-end |
@@ -36,30 +36,53 @@ see [Scope](#scope).
 
 You need **Node 20+** and the **.NET 8 SDK**.
 
+The API targets **SQL Server** by default and applies its migrations on startup. For a quick local
+trial, the [official image](https://mcr.microsoft.com/product/mssql/server/about) runs on macOS and
+Linux too:
+
+```bash
+docker run --name naturalize-mssql -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD='Change-me-123' \
+  -p 1433:1433 -d mcr.microsoft.com/mssql/server:2022-latest
+```
+
+The default connection string points at exactly this instance, so with it running:
+
 ```bash
 npm install
 npm run dev:all      # API on :5099 (Swagger at /swagger) + frontend on :5173, together
 ```
 
-`dev:all` runs both servers in one terminal and Ctrl+C stops both. The API applies migrations and
-seeds a SQLite database on first run. Prefer separate terminals? Run them independently — `npm run
-dev` starts **only** the frontend:
+`dev:all` runs both servers in one terminal and Ctrl+C stops both. The API applies the SQL Server
+migrations and seeds the database on first run. Prefer separate terminals? Run them independently —
+`npm run dev` starts **only** the frontend:
 
 ```bash
 dotnet run --project api/src/Naturalization.Api   # API   → http://localhost:5099
 npm run dev                                        # front → http://localhost:5173
 ```
 
+> **No SQL Server handy?** Set `Database__Provider=Sqlite` and the whole app runs off a single file
+> with no server — the zero-setup path the tests use. It builds its schema from the model
+> (`EnsureCreated`), so it does **not** exercise the SQL Server migrations:
+>
+> ```bash
+> Database__Provider=Sqlite dotnet run --project api/src/Naturalization.Api
+> ```
+>
+> See [`SETUP-SQLSERVER.md`](SETUP-SQLSERVER.md) for a real deployment (connection string, secrets,
+> loading your own records).
+
 Sign in with **`a.hernandez@example.gov`** / **`Naturalize!Demo1`** (an Admin — see the demo officer
 table under [Authentication](#authentication) for the Officer and Viewer accounts). The seeded
 database contains 40 fabricated applicants across every case status, so the register and every
 report have something to show.
 
-> **Upgrading from an older checkout?** The pre-migrations builds used `EnsureCreated`, which leaves a
-> `naturalization.db` with no migrations-history table. `MigrateAsync()` will then try to create
-> tables that already exist and fail at startup. Delete `api/src/Naturalization.Api/naturalization.db`
-> (and its `-wal` / `-shm` siblings) once, and it rebuilds cleanly. It is gitignored, so there is
-> nothing to commit.
+> **Upgrading a SQLite `naturalization.db` from an older checkout?** The SQLite path now builds its
+> schema with `EnsureCreated` rather than `Migrate`, so a stale file simply is not touched if it
+> already exists — and if its schema has drifted, the fix is to delete
+> `api/src/Naturalization.Api/naturalization.db` (and its `-wal` / `-shm` siblings) and let it rebuild.
+> It is gitignored, so there is nothing to commit. For a SQL Server database, `MigrateAsync()` applies
+> pending migrations in order; start from an empty database — see [`SETUP-SQLSERVER.md`](SETUP-SQLSERVER.md).
 
 ## Authentication
 
@@ -240,8 +263,12 @@ It is a reference implementation. To hold real records it still needs, at minimu
 - **Coarse roles.** Authorisation is three fixed roles (Viewer / Officer / Admin) gating applicant
   changes. There is no per-field-office scoping, no case-level authorisation, and no UI to manage an
   officer's role — a role is set when the account is seeded.
-- **SQLite migrations** rebuild a table to drop or alter a column — review any generated migration,
-  because anything not in the EF model (hand-added triggers, indexes) is lost in the rebuild.
+- **Migrations are SQL Server-shaped.** The versioned migrations under `Data/Migrations` target SQL
+  Server (the production provider), which alters columns in place. The SQLite path used by the tests
+  and the zero-setup local run does not apply them — it builds the schema from the model with
+  `EnsureCreated` — so a SQLite database is not migration-versioned. Review any generated migration
+  before applying it to real records, because anything not in the EF model (hand-added triggers,
+  indexes) is not captured by it.
 - On the enhancement branch, a *Continued* decision leaves a case blocked from ever being decided
   again, because `Decision` is unique per case; modelling decisions as an ordered history would fix it.
 
