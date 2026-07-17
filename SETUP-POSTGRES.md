@@ -1,7 +1,8 @@
 # Going live on PostgreSQL
 
-How to replace the built-in SQLite demo database — 40 **fabricated** applicants and demo officer
-accounts with public passwords — with a real PostgreSQL database holding your own records.
+How to move the app — which ships targeting SQL Server — to a real PostgreSQL database holding your own
+records, replacing the seeded demo register of 40 **fabricated** applicants and demo officer accounts
+with public passwords.
 
 This is the operational companion to the README's [**Before you deploy
 this**](README.md#before-you-deploy-this) section: that section says *what* a real deployment needs; this
@@ -46,12 +47,15 @@ price) — not the database software.
 
 ## 3. Switch the EF Core provider
 
-The app is wired for SQLite in two places. Change both.
+The app ships targeting **SQL Server** (with SQLite kept for the tests and zero-setup local runs — see
+the [SQL Server guide](SETUP-SQLSERVER.md)). To go to Postgres instead, change the provider in three
+places.
 
-**a. Swap the NuGet package** in `api/src/Naturalization.Api/Naturalization.Api.csproj` — replace
+**a. Swap the NuGet package** in `api/src/Naturalization.Api/Naturalization.Api.csproj` — replace the
+SQL Server provider
 
 ```xml
-<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.11" />
+<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.11" />
 ```
 
 with the Npgsql provider (keep it on the EF Core 8 line):
@@ -61,26 +65,32 @@ with the Npgsql provider (keep it on the EF Core 8 line):
 ```
 
 Leave `Microsoft.EntityFrameworkCore.Design` in place — it's provider-agnostic and the `dotnet ef`
-tooling needs it.
+tooling needs it. You can keep or drop `Microsoft.EntityFrameworkCore.Sqlite`; the tests use it.
 
 **b. Point the runtime at Postgres** in
-[`api/src/Naturalization.Api/Program.cs`](api/src/Naturalization.Api/Program.cs) — change the provider
-call (the connection string already comes from configuration, see §4):
+[`api/src/Naturalization.Api/Program.cs`](api/src/Naturalization.Api/Program.cs) — the provider is
+chosen in the `AddDbContext` call. Replace the SQL Server branch (`o.UseSqlServer(connection)`) with
+`o.UseNpgsql(connection)`, and in the startup DB-init block swap the `db.Database.IsSqlServer()` check
+for `db.Database.IsNpgsql()` so `MigrateAsync()` runs on the Postgres path:
 
 ```csharp
-builder.Services.AddDbContext<NaturalizationDbContext>(o => o
-    .UseNpgsql(connection)          // was .UseSqlite(connection)
-    .ConfigureWarnings(w => w.Ignore(
-        CoreEventId.PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning)));
+// AddDbContext: the non-SQLite branch
+o.UseNpgsql(connection);            // was o.UseSqlServer(connection)
+
+// DB init on startup
+if (db.Database.IsNpgsql())         // was db.Database.IsSqlServer()
+    await db.Database.MigrateAsync();
+else
+    await db.Database.EnsureCreatedAsync();
 ```
 
-Keep the `ConfigureWarnings(...)` suppression exactly as-is — it documents a deliberate modelling
-choice, not a provider quirk.
+Also update the default connection-string fallback next to it if you rely on it (it currently points at
+a local SQL Server).
 
 **c. Point the design-time factory at Postgres** in
 [`api/src/Naturalization.Api/Data/DesignTimeDbContextFactory.cs`](api/src/Naturalization.Api/Data/DesignTimeDbContextFactory.cs).
-This is what `dotnet ef` uses to build the model; if it still says SQLite, your migrations scaffold for
-the wrong provider:
+This is what `dotnet ef` uses to build the model; if it still says SQL Server, your migrations scaffold
+for the wrong provider:
 
 ```csharp
 var options = new DbContextOptionsBuilder<NaturalizationDbContext>()
@@ -96,7 +106,8 @@ it never touches production data.
 ## 4. Connection string & environment variables
 
 The runtime reads its connection string from configuration key `ConnectionStrings:Default`
-(env `ConnectionStrings__Default`), falling back to the SQLite file only if it is unset — see
+(env `ConnectionStrings__Default`). Unset, it falls back to the default the active provider hard-codes
+(so update that fallback in `Program.cs` when you switch to Npgsql) — see
 [`Program.cs`](api/src/Naturalization.Api/Program.cs). Set these on the API host:
 
 | Variable | Required | Purpose |
@@ -137,19 +148,19 @@ VITE_API_URL="https://api.your-office.example" npm run build
 
 ## 5. Regenerate the migrations for Postgres
 
-The migrations under `api/src/Naturalization.Api/Data/Migrations/` were generated for SQLite (SQLite
-column types and table-rebuild semantics) and **will not apply to Postgres**. Because you are going live
-from an empty database with no rows to preserve, the clean move is to regenerate a single fresh
-`InitialCreate` for the new provider:
+The migrations under `api/src/Naturalization.Api/Data/Migrations/` were generated for **SQL Server**
+(SQL Server column types) and **will not apply to Postgres**. Because you are going live from an empty
+database with no rows to preserve, the clean move is — after the provider swap in §3 — to regenerate a
+single fresh `InitialCreate` for Postgres:
 
 ```bash
 # from the repo root
 dotnet tool restore                                   # restores the pinned dotnet-ef 8.0.11
 
-rm api/src/Naturalization.Api/Data/Migrations/*.cs    # drop the SQLite-shaped migrations
+rm api/src/Naturalization.Api/Data/Migrations/*.cs    # drop the SQL Server-shaped migrations
 
 dotnet ef migrations add InitialCreate \
-  -p api/src/Naturalization.Api -s api/src/Naturalization.Api
+  -p api/src/Naturalization.Api -s api/src/Naturalization.Api -o Data/Migrations
 ```
 
 Then apply the schema. Either:
@@ -162,9 +173,8 @@ Then apply the schema. Either:
   dotnet ef database update -p api/src/Naturalization.Api -s api/src/Naturalization.Api
   ```
 
-Review the generated migration before applying it to anything you care about. (The README's
-[Known limitations](README.md#known-limitations) note about SQLite rebuilding a table to alter a column
-no longer applies once you're on Postgres — Postgres does in-place `ALTER TABLE`.)
+Review the generated migration before applying it to anything you care about. (Like SQL Server,
+Postgres does in-place `ALTER TABLE`, so the SQLite table-rebuild caveat does not apply.)
 
 Confirm it applied:
 

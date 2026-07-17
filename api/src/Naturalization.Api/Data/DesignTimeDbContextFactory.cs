@@ -20,8 +20,17 @@ public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<Naturaliza
 {
     public NaturalizationDbContext CreateDbContext(string[] args)
     {
+        // The design-time connection only needs to reach *a* SQL Server instance
+        // so EF can read provider metadata and scaffold SQL Server-shaped
+        // migrations; it never touches production data. Override it with
+        // ConnectionStrings__Default in the environment if the local default here
+        // is not where your instance lives.
+        var connection =
+            Environment.GetEnvironmentVariable("ConnectionStrings__Default")
+            ?? "Server=localhost,1433;Database=naturalize;User Id=sa;Password=Change-me-123;TrustServerCertificate=True";
+
         var options = new DbContextOptionsBuilder<NaturalizationDbContext>()
-            .UseSqlite("Data Source=naturalization.db")
+            .UseSqlServer(connection)
             .Options;
 
         return new NaturalizationDbContext(options);

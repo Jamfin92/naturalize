@@ -95,6 +95,10 @@ export default defineConfig({
       env: {
         ASPNETCORE_ENVIRONMENT: 'Development',
         ASPNETCORE_URLS: API_URL,
+        // The app defaults to SQL Server (production); the e2e host runs off a
+        // throwaway SQLite file instead, so no database server is needed to run
+        // the browser suite. See Program.cs on the provider switch.
+        Database__Provider: 'Sqlite',
         ConnectionStrings__Default: `Data Source=${E2E_DB}`,
         Seed__Demo: 'true', // the reports have nothing to render without a caseload
         Auth__Jwt__Key: 'e2e-signing-key-not-a-secret-0123456789abcdef',
