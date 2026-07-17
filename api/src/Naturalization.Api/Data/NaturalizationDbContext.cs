@@ -7,9 +7,8 @@ public class NaturalizationDbContext(DbContextOptions<NaturalizationDbContext> o
     : DbContext(options)
 {
     public DbSet<Applicant> Applicants => Set<Applicant>();
-    public DbSet<TownCode> TownCodes => Set<TownCode>();
+    public DbSet<Locality> Localities => Set<Locality>();
     public DbSet<CountryCode> CountryCodes => Set<CountryCode>();
-    public DbSet<City> Cities => Set<City>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<ApplicationUser> Users => Set<ApplicationUser>();
 
@@ -48,10 +47,18 @@ public class NaturalizationDbContext(DbContextOptions<NaturalizationDbContext> o
             e.Property(x => x.MiddleName).HasMaxLength(100);
             e.Property(x => x.LastName).HasMaxLength(100).IsRequired();
             e.Property(x => x.Address1).HasMaxLength(200);
-            e.Property(x => x.TownCode).HasMaxLength(3);
             e.Property(x => x.CountryCode).HasMaxLength(3);
-            e.Property(x => x.ZipCode).HasMaxLength(16);
             e.Property(x => x.Email).HasMaxLength(200);
+
+            // Residence is a foreign key into Locality, not free text. Optional
+            // (an applicant may be entered before their locality is resolved), and
+            // Restrict on delete so a locality that is still in use cannot be
+            // pulled out from under the records that point at it. EF creates the
+            // IX_Applicants_LocalityId index for the FK automatically.
+            e.HasOne(x => x.Locality)
+                .WithMany()
+                .HasForeignKey(x => x.LocalityId)
+                .OnDelete(DeleteBehavior.Restrict);
             e.Property(x => x.DecisionNotes).HasMaxLength(2000);
             e.Property(x => x.DeletedBy).HasMaxLength(120);
 
@@ -63,33 +70,27 @@ public class NaturalizationDbContext(DbContextOptions<NaturalizationDbContext> o
             e.HasQueryFilter(x => !x.IsDeleted);
         });
 
-        // Town and country lookups share a shape. Code is short; index it (plus
-        // BaseCode) so a lookup by code is a seek, not a scan.
-        b.Entity<TownCode>(e =>
+        // The residential locality reference. Reachable by all three of its keys:
+        // Id is the primary key (the applicant FK points here); ZipCode and Name
+        // each get an index so a lookup by either is a seek, not a scan. A ZIP maps
+        // to one locality (unique); a name can span many ZIPs (not).
+        b.Entity<Locality>(e =>
         {
-            e.Property(x => x.BaseCode).HasMaxLength(1).IsRequired();
-            e.Property(x => x.Code).HasMaxLength(3).IsRequired();
-            e.Property(x => x.Description).HasMaxLength(200).IsRequired();
-            e.HasIndex(x => new { x.BaseCode, x.Code }).IsUnique();
+            e.Property(x => x.ZipCode).HasMaxLength(16).IsRequired();
+            e.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            e.Property(x => x.State).HasMaxLength(2).IsRequired();
+            e.HasIndex(x => x.ZipCode).IsUnique();
+            e.HasIndex(x => x.Name);
         });
 
+        // Country of birth. Code is short; index it (plus BaseCode) so a lookup by
+        // code is a seek, not a scan.
         b.Entity<CountryCode>(e =>
         {
             e.Property(x => x.BaseCode).HasMaxLength(1).IsRequired();
             e.Property(x => x.Code).HasMaxLength(3).IsRequired();
             e.Property(x => x.Description).HasMaxLength(200).IsRequired();
             e.HasIndex(x => new { x.BaseCode, x.Code }).IsUnique();
-        });
-
-        // City lookup, reachable by all three of its keys. Id is the primary key;
-        // ZipCode and Name each get an index so a lookup by either is a seek, not a
-        // scan. A ZIP maps to one city (unique); a city spans many ZIPs (not).
-        b.Entity<City>(e =>
-        {
-            e.Property(x => x.ZipCode).HasMaxLength(16).IsRequired();
-            e.Property(x => x.Name).HasMaxLength(200).IsRequired();
-            e.HasIndex(x => x.ZipCode).IsUnique();
-            e.HasIndex(x => x.Name);
         });
 
         // Append-only. No FK, no soft-delete flag, no query filter: this must

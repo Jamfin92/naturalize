@@ -22,6 +22,7 @@ import {
   STATUS_LABELS,
   canManageApplicants,
   type ApplicationStatus,
+  type Locality,
   type Lookup,
 } from '@/lib/types'
 
@@ -46,9 +47,9 @@ type FormState = {
   birthDate: string
   admissionDate: string
   address1: string
-  townCode: string
+  // Residence FK as a string (select value); folded to number|null on submit.
+  localityId: string
   countryCode: string
-  zipCode: string
   email: string
   status: ApplicationStatus
   decisionDate: string
@@ -65,9 +66,8 @@ const EMPTY: FormState = {
   birthDate: '',
   admissionDate: '',
   address1: '',
-  townCode: '',
+  localityId: '',
   countryCode: '',
-  zipCode: '',
   email: '',
   status: 'Received',
   decisionDate: '',
@@ -88,15 +88,15 @@ export function ApplicantFormPage() {
   const [errors, setErrors] = useState<FieldErrors>({})
   const [loading, setLoading] = useState(editing)
   const [saving, setSaving] = useState(false)
-  const [towns, setTowns] = useState<Lookup[]>([])
+  const [localities, setLocalities] = useState<Locality[]>([])
   const [countries, setCountries] = useState<Lookup[]>([])
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([api.lookups.towns(), api.lookups.countries()])
-      .then(([t, c]) => {
+    Promise.all([api.lookups.localities(), api.lookups.countries()])
+      .then(([l, c]) => {
         if (cancelled) return
-        setTowns(t)
+        setLocalities(l)
         setCountries(c)
       })
       .catch(() => {
@@ -125,9 +125,8 @@ export function ApplicantFormPage() {
           birthDate: a.birthDate,
           admissionDate: a.admissionDate,
           address1: a.address1,
-          townCode: a.townCode,
+          localityId: a.localityId != null ? String(a.localityId) : '',
           countryCode: a.countryCode,
-          zipCode: a.zipCode,
           email: a.email,
           status: a.status,
           decisionDate: a.decisionDate ?? '',
@@ -162,8 +161,13 @@ export function ApplicantFormPage() {
     setSaving(true)
     setErrors({})
 
-    // Fold the empty decision date to null; the API's DateOnly? can't parse "".
-    const body: ApplicantInput = { ...form, decisionDate: form.decisionDate || null }
+    // Fold the empty decision date to null (the API's DateOnly? can't parse "")
+    // and the locality select's string value to number|null for the FK.
+    const body: ApplicantInput = {
+      ...form,
+      localityId: form.localityId ? Number(form.localityId) : null,
+      decisionDate: form.decisionDate || null,
+    }
 
     try {
       const saved = editing
@@ -335,29 +339,25 @@ export function ApplicantFormPage() {
             </div>
 
             <SelectField
-              id="townCode"
-              label="Town"
-              value={form.townCode}
-              onValueChange={setValue('townCode')}
-              error={errors.townCode}
-              placeholder="Select a town…"
-              options={towns.map((t) => ({ value: t.code, label: t.description }))}
+              id="localityId"
+              label="Residence"
+              value={form.localityId}
+              onValueChange={setValue('localityId')}
+              error={errors.localityId}
+              placeholder="Select a locality…"
+              options={localities.map((l) => ({
+                value: String(l.id),
+                label: `${l.name}, ${l.state} ${l.zipCode}`,
+              }))}
             />
             <SelectField
               id="countryCode"
-              label="Country"
+              label="Country of birth"
               value={form.countryCode}
               onValueChange={setValue('countryCode')}
               error={errors.countryCode}
               placeholder="Select a country…"
               options={countries.map((c) => ({ value: c.code, label: c.description }))}
-            />
-            <Field
-              id="zipCode"
-              label="ZIP"
-              value={form.zipCode}
-              onChange={set('zipCode')}
-              error={errors.zipCode}
             />
             <Field
               id="email"

@@ -192,32 +192,34 @@ Either way, respect the schema the app relies on:
 - Rows are hidden unless `IsDeleted = false` — the global soft-delete query filter excludes withdrawn
   records from every read path.
 
-**Cities.** The `Cities` lookup (`ZipCode` → `Name`, `ZipCode` **unique**, `Name` indexed) ships with no
-demo seed — populate it from any free ZIP↔city dataset. Three good public sources, least-work first:
+**Localities.** The `Localities` lookup (`Id`, `ZipCode` **unique**, `Name`, `State`) is the single
+residential-address reference — an applicant's `LocalityId` points at one row, which supplies the city, state
+and ZIP. The demo seeds a handful of New England localities; for real data, populate it from any free ZIP↔city
+dataset. Three good public sources, least-work first:
 
 - **GeoNames postal codes** — [download](http://download.geonames.org/export/zip/) `US.zip`, unzip to
-  `US.txt`. Tab-delimited UTF-8; **column 2 is the ZIP, column 3 the city name** (see the
-  [readme](http://download.geonames.org/export/zip/readme.txt)). Direct ZIP→city, but licensed
+  `US.txt`. Tab-delimited UTF-8; **column 2 is the ZIP, column 3 the city name, column 5 the 2-letter state**
+  (see the [readme](http://download.geonames.org/export/zip/readme.txt)). Direct ZIP→city→state, but licensed
   **[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)** — credit GeoNames wherever you surface it.
 - **SimpleMaps US ZIP Codes, Basic tier** — [simplemaps.com/data/us-zips](https://simplemaps.com/data/us-zips).
   Clean CSV with `zip`, `city`, `state_id`, one row per ZIP. **Free, but requires a back-link** to that page
   from a public page that uses the data.
 - **US Census ZCTA Gazetteer** — [census.gov Gazetteer files](https://www.census.gov/geographies/reference-files/time-series/geo/gazetteer-files.html).
   **Public domain**, no attribution — but the ZCTA file carries **codes and coordinates, not city names**, so
-  you must join it to the Census *Places* gazetteer (or a ZIP crosswalk) to get a name. Most work of the three.
+  you must join it to the Census *Places* gazetteer (or a ZIP crosswalk) to get name and state. Most work of the three.
 
-Reduce whichever you pick to two columns and load it. `ZipCode` is unique, so collapse GeoNames' several
-rows-per-ZIP to one first — e.g. from `US.txt`:
+Reduce whichever you pick to `ZipCode,Name,State` and load it. `ZipCode` is unique, so collapse GeoNames'
+several rows-per-ZIP to one first — e.g. from `US.txt`:
 
 ```bash
-# tab-delimited: $2 = postal code, $3 = place name → one city per ZIP
-awk -F'\t' '!seen[$2]++ { printf "%s,%s\n", $2, $3 }' US.txt > cities.csv
+# tab-delimited: $2 = ZIP, $3 = city, $5 = state → one row per ZIP
+awk -F'\t' '!seen[$2]++ { printf "%s,%s,%s\n", $2, $3, $5 }' US.txt > localities.csv
 ```
 
-Load `cities.csv` with `bcp` / `BULK INSERT` — the identity `Id` fills itself, so supply only `ZipCode` and
-`Name`. For a repeatable in-app seed instead, add a `SeedCitiesAsync` to `DbInitializer` that reads the file
-and `db.Cities.Add(...)`s the rows behind an `if (await db.Cities.AnyAsync()) return;` guard, mirroring
-`SeedDemoApplicantsAsync`.
+Load `localities.csv` with `bcp` / `BULK INSERT` — the identity `Id` fills itself, so supply only `ZipCode`,
+`Name` and `State`. For a repeatable in-app seed instead, add a `SeedLocalitiesAsync` to `DbInitializer` that
+reads the file and `db.Localities.Add(...)`s the rows behind an `if (await db.Localities.AnyAsync()) return;`
+guard, mirroring `SeedDemoApplicantsAsync`.
 
 ---
 

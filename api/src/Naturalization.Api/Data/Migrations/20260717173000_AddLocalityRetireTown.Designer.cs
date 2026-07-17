@@ -12,8 +12,8 @@ using Naturalization.Api.Data;
 namespace Naturalization.Api.Data.Migrations
 {
     [DbContext(typeof(NaturalizationDbContext))]
-    [Migration("20260717170000_AddCityTable")]
-    partial class AddCityTable
+    [Migration("20260717173000_AddLocalityRetireTown")]
+    partial class AddLocalityRetireTown
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -89,6 +89,9 @@ namespace Naturalization.Api.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<int?>("LocalityId")
+                        .HasColumnType("int");
+
                     b.Property<string>("MiddleName")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -108,18 +111,8 @@ namespace Naturalization.Api.Data.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
 
-                    b.Property<string>("TownCode")
-                        .IsRequired()
-                        .HasMaxLength(3)
-                        .HasColumnType("nvarchar(3)");
-
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
-
-                    b.Property<string>("ZipCode")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("nvarchar(16)");
 
                     b.HasKey("Id");
 
@@ -127,6 +120,8 @@ namespace Naturalization.Api.Data.Migrations
                         .IsUnique();
 
                     b.HasIndex("IsDeleted");
+
+                    b.HasIndex("LocalityId");
 
                     b.HasIndex("Status");
 
@@ -223,34 +218,6 @@ namespace Naturalization.Api.Data.Migrations
                     b.ToTable("AuditEvents");
                 });
 
-            modelBuilder.Entity("Naturalization.Api.Domain.City", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("ZipCode")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("nvarchar(16)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Name");
-
-                    b.HasIndex("ZipCode")
-                        .IsUnique();
-
-                    b.ToTable("Cities");
-                });
-
             modelBuilder.Entity("Naturalization.Api.Domain.CountryCode", b =>
                 {
                     b.Property<int>("Id")
@@ -282,7 +249,7 @@ namespace Naturalization.Api.Data.Migrations
                     b.ToTable("CountryCodes");
                 });
 
-            modelBuilder.Entity("Naturalization.Api.Domain.TownCode", b =>
+            modelBuilder.Entity("Naturalization.Api.Domain.Locality", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -290,27 +257,39 @@ namespace Naturalization.Api.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("BaseCode")
-                        .IsRequired()
-                        .HasMaxLength(1)
-                        .HasColumnType("nvarchar(1)");
-
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(3)
-                        .HasColumnType("nvarchar(3)");
-
-                    b.Property<string>("Description")
+                    b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)");
+
+                    b.Property<string>("ZipCode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("BaseCode", "Code")
+                    b.HasIndex("Name");
+
+                    b.HasIndex("ZipCode")
                         .IsUnique();
 
-                    b.ToTable("TownCodes");
+                    b.ToTable("Localities");
+                });
+
+            modelBuilder.Entity("Naturalization.Api.Domain.Applicant", b =>
+                {
+                    b.HasOne("Naturalization.Api.Domain.Locality", "Locality")
+                        .WithMany()
+                        .HasForeignKey("LocalityId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Locality");
                 });
 #pragma warning restore 612, 618
         }

@@ -36,13 +36,19 @@ public static class ApplicantEndpoints
             }
 
             var total = await query.CountAsync();
-            var items = await query
+
+            // Materialise the entities WITH their locality, then map in memory.
+            // Projecting straight to ApplicantDto in SQL would make EF drop the
+            // Include (the query no longer returns the entity type), leaving
+            // a.Locality null and the city/state/ZIP blank on every row.
+            var rows = await query
+                .Include(a => a.Locality)
                 .OrderBy(a => a.LastName)
                 .ThenBy(a => a.FirstName)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .Select(a => ApplicantDto.From(a))
                 .ToListAsync();
+            var items = rows.Select(ApplicantDto.From).ToList();
 
             return TypedResults.Ok(new Paged<ApplicantDto>(items, page, pageSize, total));
         })
@@ -51,7 +57,9 @@ public static class ApplicantEndpoints
 
         g.MapGet("/{id:int}", async Task<Results<Ok<ApplicantDto>, NotFound>> (NaturalizationDbContext db, int id) =>
         {
-            var a = await db.Applicants.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+            var a = await db.Applicants.AsNoTracking()
+                .Include(x => x.Locality)
+                .FirstOrDefaultAsync(x => x.Id == id);
             return a is null ? TypedResults.NotFound() : TypedResults.Ok(ApplicantDto.From(a));
         })
         .WithName("GetApplicant");
@@ -84,6 +92,11 @@ public static class ApplicantEndpoints
             NaturalizationDbContext db, ClaimsPrincipal user, ApplicantInput input) =>
         {
             if (Validate(input) is { Count: > 0 } errors) return TypedResults.ValidationProblem(errors);
+
+            // Residence is a real FK now: a LocalityId that doesn't exist would trip
+            // the constraint and surface as a raw 500. Turn it into a field error.
+            if (await UnknownLocality(db, input.LocalityId) is { } localityError)
+                return TypedResults.ValidationProblem(localityError);
 
             /*
              * IgnoreQueryFilters is doing real work here.
@@ -125,9 +138,8 @@ public static class ApplicantEndpoints
                 BirthDate = input.BirthDate,
                 AdmissionDate = input.AdmissionDate,
                 Address1 = input.Address1,
-                TownCode = input.TownCode,
+                LocalityId = input.LocalityId,
                 CountryCode = input.CountryCode,
-                ZipCode = input.ZipCode,
                 Email = input.Email,
                 Status = ParseStatus(input.Status) ?? ApplicationStatus.Received,
                 DecisionDate = input.DecisionDate,
@@ -142,6 +154,8 @@ public static class ApplicantEndpoints
                 $"Applicant {a.FullName} ({a.AlienNumber}) added to the register.");
             await db.SaveChangesAsync();
 
+            // Load the locality so the returned DTO carries city/state/zip.
+            await db.Entry(a).Reference(x => x.Locality).LoadAsync();
             return TypedResults.Created($"/api/applicants/{a.Id}", ApplicantDto.From(a));
         })
         .RequireAuthorization(Policies.ManageApplicants)
@@ -151,6 +165,9 @@ public static class ApplicantEndpoints
             NaturalizationDbContext db, ClaimsPrincipal user, int id, ApplicantInput input) =>
         {
             if (Validate(input) is { Count: > 0 } errors) return TypedResults.ValidationProblem(errors);
+
+            if (await UnknownLocality(db, input.LocalityId) is { } localityError)
+                return TypedResults.ValidationProblem(localityError);
 
             var a = await db.Applicants.FirstOrDefaultAsync(x => x.Id == id);
             if (a is null) return TypedResults.NotFound();
@@ -179,9 +196,8 @@ public static class ApplicantEndpoints
             a.BirthDate = input.BirthDate;
             a.AdmissionDate = input.AdmissionDate;
             a.Address1 = input.Address1;
-            a.TownCode = input.TownCode;
+            a.LocalityId = input.LocalityId;
             a.CountryCode = input.CountryCode;
-            a.ZipCode = input.ZipCode;
             a.Email = input.Email;
             a.Status = ParseStatus(input.Status) ?? a.Status;
             a.DecisionDate = input.DecisionDate;
@@ -195,6 +211,9 @@ public static class ApplicantEndpoints
             }
 
             await db.SaveChangesAsync();
+
+            // Reload the (possibly changed) locality for the returned DTO.
+            await db.Entry(a).Reference(x => x.Locality).LoadAsync();
             return TypedResults.Ok(ApplicantDto.From(a));
         })
         .RequireAuthorization(Policies.ManageApplicants)
@@ -232,7 +251,9 @@ public static class ApplicantEndpoints
         g.MapPost("/{id:int}/restore", async Task<Results<Ok<ApplicantDto>, NotFound>> (
             NaturalizationDbContext db, ClaimsPrincipal user, int id) =>
         {
-            var a = await db.Applicants.IgnoreQueryFilters().FirstOrDefaultAsync(x => x.Id == id);
+            var a = await db.Applicants.IgnoreQueryFilters()
+                .Include(x => x.Locality)
+                .FirstOrDefaultAsync(x => x.Id == id);
             if (a is null) return TypedResults.NotFound();
 
             if (a.IsDeleted)
@@ -262,6 +283,19 @@ public static class ApplicantEndpoints
     /// <summary>Same fold-blank-to-null treatment for the free-text decision notes.</summary>
     private static string? NormalizeNotes(string? notes) =>
         string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+
+    /// <summary>
+    /// A field error if <paramref name="localityId"/> is given but no such
+    /// locality exists; null if it is null (residence is optional) or valid. Keeps
+    /// a bad FK from surfacing as a raw 500 from the database constraint.
+    /// </summary>
+    private static async Task<Dictionary<string, string[]>?> UnknownLocality(
+        NaturalizationDbContext db, int? localityId)
+    {
+        if (localityId is not int id) return null;
+        var exists = await db.Localities.AnyAsync(l => l.Id == id);
+        return exists ? null : new() { ["localityId"] = ["Unknown locality."] };
+    }
 
     /// <summary>Parse the wire status into the enum, tolerantly; null if blank or unknown.</summary>
     private static ApplicationStatus? ParseStatus(string? status) =>
@@ -318,9 +352,8 @@ public static class ApplicantEndpoints
         Check("date of birth", a.BirthDate, i.BirthDate);
         Check("admission date", a.AdmissionDate, i.AdmissionDate);
         Check("address", a.Address1, i.Address1);
-        Check("town", a.TownCode, i.TownCode);
+        Check("residence", a.LocalityId, i.LocalityId);
         Check("country", a.CountryCode, i.CountryCode);
-        Check("ZIP", a.ZipCode, i.ZipCode);
         Check("email", a.Email, i.Email);
         Check("status", a.Status, ParseStatus(i.Status) ?? a.Status);
         Check("decision date", a.DecisionDate, i.DecisionDate);

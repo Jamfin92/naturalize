@@ -47,8 +47,9 @@ public static class TestClient
     public static object SampleApplicant(string alienNumber, string name = "Test Applicant")
     {
         // Callers pass a two-token display name; split it into the parts the API now
-        // takes. Middle name is omitted (it's optional server-side). Town and country
-        // are codes; the values need not exist in the lookup tables (there is no FK).
+        // takes. Middle name is omitted (it's optional server-side). Residence
+        // (localityId) is left null so the sample needs no seeded Locality — a real
+        // FK now, unlike the country code, which is free text with no FK.
         var parts = name.Split(' ', 2);
         return new
         {
@@ -60,9 +61,8 @@ public static class TestClient
             birthDate = "1988-03-14",
             admissionDate = "2016-06-01",
             address1 = "1 Test St",
-            townCode = "001",
+            localityId = (int?)null,
             countryCode = "001",
-            zipCode = "02101",
             email = "test@example.com",
             status = "Received",
         };
