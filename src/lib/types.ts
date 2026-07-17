@@ -1,13 +1,13 @@
 /** Mirrors the C# domain in api/src/Naturalization.Api/Domain. Keep in sync. */
 
 /**
- * What an officer is allowed to do. Mirrors the C# OfficerRole enum. Viewer is
+ * What a user is allowed to do. Mirrors the C# OfficerRole enum. Viewer is
  * read-only, Officer can add and edit applicants, Admin can additionally
  * withdraw and restore records.
  */
 export type OfficerRole = 'Viewer' | 'Officer' | 'Admin'
 
-/** The signed-in caseworker, as resolved by the API from the bearer token. */
+/** The signed-in user, as resolved by the API from the bearer token. */
 export interface Officer {
   id: number
   name: string
@@ -28,9 +28,8 @@ export interface Officer {
  * though, and a strict `role === 'Admin'` fails SILENTLY on any drift — a value
  * that arrives as "admin", "ADMIN" or "Admin " renders as an Admin in the UI but
  * matches nothing, so every action is stripped from an account the sidebar still
- * labels Admin. (That is precisely the "chip says Admin but the buttons are gone"
- * report.) Compare trimmed and case-insensitively; an unrecognised value returns
- * undefined and the callers below fail OPEN, as before.
+ * labels Admin. Compare trimmed and case-insensitively; an unrecognised value
+ * returns undefined and the callers below fail OPEN, as before.
  */
 export function normalizeRole(role: string | null | undefined): OfficerRole | undefined {
   switch (role?.trim().toLowerCase()) {
@@ -46,15 +45,11 @@ export function normalizeRole(role: string | null | undefined): OfficerRole | un
 }
 
 /**
- * Can this officer create or edit applicant records? Officer and Admin can; a
- * read-only Viewer cannot.
- *
- * These helpers are a convenience — "don't offer an action that would only 403"
- * — NOT a security boundary; the API enforces the rule regardless. So when the
- * role is unknown (an officer object from an API that predates roles) we fail
- * OPEN: show the action and let the server decide. Hiding it would mean a
- * frontend one deploy ahead of its API silently loses the ability to edit
- * anything, which is precisely the trap the first cut of this fell into.
+ * Can this user create or edit applicant records? Officer and Admin can; a
+ * read-only Viewer cannot. A convenience — "don't offer an action that would
+ * only 403" — NOT a security boundary; the API enforces the rule regardless. So
+ * when the role is unknown (an object from an API that predates roles) we fail
+ * OPEN: show the action and let the server decide.
  */
 export function canManageApplicants(officer: Officer | null): boolean {
   if (!officer) return false
@@ -63,7 +58,7 @@ export function canManageApplicants(officer: Officer | null): boolean {
   return role === 'Officer' || role === 'Admin'
 }
 
-/** Can this officer withdraw or restore a record? Admin only (fails open on unknown role). */
+/** Can this user withdraw or restore a record? Admin only (fails open on unknown role). */
 export function canWithdrawApplicants(officer: Officer | null): boolean {
   if (!officer) return false
   const role = normalizeRole(officer.role)
@@ -74,9 +69,8 @@ export function canWithdrawApplicants(officer: Officer | null): boolean {
 /**
  * A row in the system audit log: who touched this record, and how.
  *
- * Distinct from CaseEvent (a case's own lifecycle). This one has no foreign key
- * and is never deleted, so it survives the record it describes — which is what
- * makes a withdrawn applicant's history still readable.
+ * Has no foreign key and is never deleted, so it survives the record it
+ * describes — which is what makes a withdrawn applicant's history still readable.
  */
 export interface AuditEvent {
   id: number
@@ -88,119 +82,53 @@ export interface AuditEvent {
   summary: string
 }
 
-export const CASE_STATUSES = [
+/**
+ * Where a naturalization application stands. Mirrors the C# ApplicationStatus
+ * enum. The whole per-case pipeline collapsed to these once the case, decision
+ * and evidence tables were folded into the applicant row.
+ */
+export const APPLICATION_STATUSES = [
   'Received',
-  'BiometricsScheduled',
-  'BiometricsCompleted',
-  'InterviewScheduled',
-  'InterviewCompleted',
+  'InReview',
   'Approved',
   'Denied',
-  'OathScheduled',
   'Naturalized',
   'Withdrawn',
 ] as const
 
-export type CaseStatus = (typeof CASE_STATUSES)[number]
+export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number]
 
-export const DECISION_OUTCOMES = ['Approved', 'Denied', 'Continued'] as const
-export type DecisionOutcome = (typeof DECISION_OUTCOMES)[number]
-
-export const DOCUMENT_STATUSES = ['Received', 'Verified', 'Rejected'] as const
-export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number]
+/** A code/description pair from a lookup table (towns, countries). */
+export interface Lookup {
+  code: string
+  description: string
+}
 
 export interface Applicant {
   id: number
   alienNumber: string
+  naturalizationNumber: string
+  petitionNumber: string
   firstName: string
   /** Optional; the API returns "" when the applicant has no middle name. */
   middleName: string
   lastName: string
   /** Server-composed "First Middle Last" for display. Read-only — not sent on create/edit. */
   fullName: string
-  dateOfBirth: string
-  countryOfBirth: string
-  nationality: string
-  addressLine: string
-  city: string
-  state: string
-  postalCode: string
+  birthDate: string
+  admissionDate: string
+  address1: string
+  townCode: string
+  countryCode: string
+  zipCode: string
   email: string
-  phone: string
-  lawfulPermanentResidentSince: string
+  status: ApplicationStatus
+  /** Null until the application is decided. */
+  decisionDate: string | null
+  decisionNotes: string
   createdAt: string
-}
-
-export interface NaturalizationCase {
-  id: number
-  applicantId: number
-  applicantName: string
-  alienNumber: string
-  receiptNumber: string
-  filedOn: string
-  fieldOffice: string
-  status: CaseStatus
-  biometricsOn: string | null
-  interviewOn: string | null
-  oathOn: string | null
-  daysPending: number
-}
-
-export interface Decision {
-  id: number
-  caseId: number
-  receiptNumber: string
-  applicantName: string
-  outcome: DecisionOutcome
-  decidedOn: string
-  decidedBy: string
-  rationale: string
-  denialReasonCode: string | null
-}
-
-export interface EvidenceDocument {
-  id: number
-  caseId: number
-  documentType: string
-  fileName: string
-  contentType: string
-  sizeBytes: number
-  sha256: string
-  status: DocumentStatus
-  uploadedAt: string
-}
-
-export interface CaseEvent {
-  id: number
-  caseId: number
-  eventType: string
-  occurredAt: string
-  actor: string
-  notes: string
-}
-
-export interface CaseDetail extends NaturalizationCase {
-  applicant: Applicant
-  documents: EvidenceDocument[]
-  events: CaseEvent[]
-  decision: Decision | null
-  /*
-   * The legal next statuses, computed server-side by StatusTransitions.cs.
-   * The client renders exactly these as buttons rather than re-implementing
-   * the state machine — one source of truth, and no way for the UI to offer
-   * a transition the API would reject.
-   */
-  allowedTransitions: CaseStatus[]
-}
-
-export interface DashboardMetrics {
-  totalApplicants: number
-  pendingCases: number
-  approvedThisMonth: number
-  deniedThisMonth: number
-  medianDaysToDecision: number
-  statusCounts: Array<{ status: CaseStatus; count: number }>
-  recentEvents: CaseEvent[]
+  /** Null on a record never changed since creation. */
+  updatedAt: string | null
 }
 
 export interface Paged<T> {
@@ -211,18 +139,14 @@ export interface Paged<T> {
 }
 
 /** Human-facing labels — the enum names are terse on purpose. */
-export const STATUS_LABELS: Record<CaseStatus, string> = {
+export const STATUS_LABELS: Record<ApplicationStatus, string> = {
   Received: 'Received',
-  BiometricsScheduled: 'Biometrics scheduled',
-  BiometricsCompleted: 'Biometrics completed',
-  InterviewScheduled: 'Interview scheduled',
-  InterviewCompleted: 'Interview completed',
+  InReview: 'In review',
   Approved: 'Approved',
   Denied: 'Denied',
-  OathScheduled: 'Oath scheduled',
   Naturalized: 'Naturalized',
   Withdrawn: 'Withdrawn',
 }
 
 /** Terminal states carry no further action. */
-export const TERMINAL_STATUSES: CaseStatus[] = ['Naturalized', 'Denied', 'Withdrawn']
+export const TERMINAL_STATUSES: ApplicationStatus[] = ['Naturalized', 'Denied', 'Withdrawn']

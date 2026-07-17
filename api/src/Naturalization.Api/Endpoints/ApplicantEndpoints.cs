@@ -56,21 +56,6 @@ public static class ApplicantEndpoints
         })
         .WithName("GetApplicant");
 
-        g.MapGet("/{id:int}/cases", async Task<Results<Ok<List<CaseDto>>, NotFound>> (NaturalizationDbContext db, int id) =>
-        {
-            if (!await db.Applicants.AnyAsync(a => a.Id == id)) return TypedResults.NotFound();
-
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
-            var cases = await db.Cases.AsNoTracking()
-                .Include(c => c.Applicant)
-                .Where(c => c.ApplicantId == id)
-                .OrderByDescending(c => c.FiledOn)
-                .ToListAsync();
-
-            return TypedResults.Ok(cases.Select(c => CaseDto.From(c, today)).ToList());
-        })
-        .WithName("GetApplicantCases");
-
         /*
          * The record's own history: created, updated, withdrawn, restored, by whom
          * and when. This is what makes the soft delete visible — withdraw a record
@@ -132,19 +117,21 @@ public static class ApplicantEndpoints
             var a = new Applicant
             {
                 AlienNumber = input.AlienNumber,
+                NaturalizationNumber = (input.NaturalizationNumber ?? "").Trim(),
+                PetitionNumber = (input.PetitionNumber ?? "").Trim(),
                 FirstName = input.FirstName,
                 MiddleName = NormalizeMiddle(input.MiddleName),
                 LastName = input.LastName,
-                DateOfBirth = input.DateOfBirth,
-                CountryOfBirth = input.CountryOfBirth,
-                Nationality = input.Nationality,
-                AddressLine = input.AddressLine,
-                City = input.City,
-                State = input.State,
-                PostalCode = input.PostalCode,
+                BirthDate = input.BirthDate,
+                AdmissionDate = input.AdmissionDate,
+                Address1 = input.Address1,
+                TownCode = input.TownCode,
+                CountryCode = input.CountryCode,
+                ZipCode = input.ZipCode,
                 Email = input.Email,
-                Phone = input.Phone,
-                LawfulPermanentResidentSince = input.LawfulPermanentResidentSince,
+                Status = ParseStatus(input.Status) ?? ApplicationStatus.Received,
+                DecisionDate = input.DecisionDate,
+                DecisionNotes = NormalizeNotes(input.DecisionNotes),
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -184,19 +171,22 @@ public static class ApplicantEndpoints
             var changes = Diff(a, input);
 
             a.AlienNumber = input.AlienNumber;
+            a.NaturalizationNumber = (input.NaturalizationNumber ?? "").Trim();
+            a.PetitionNumber = (input.PetitionNumber ?? "").Trim();
             a.FirstName = input.FirstName;
             a.MiddleName = NormalizeMiddle(input.MiddleName);
             a.LastName = input.LastName;
-            a.DateOfBirth = input.DateOfBirth;
-            a.CountryOfBirth = input.CountryOfBirth;
-            a.Nationality = input.Nationality;
-            a.AddressLine = input.AddressLine;
-            a.City = input.City;
-            a.State = input.State;
-            a.PostalCode = input.PostalCode;
+            a.BirthDate = input.BirthDate;
+            a.AdmissionDate = input.AdmissionDate;
+            a.Address1 = input.Address1;
+            a.TownCode = input.TownCode;
+            a.CountryCode = input.CountryCode;
+            a.ZipCode = input.ZipCode;
             a.Email = input.Email;
-            a.Phone = input.Phone;
-            a.LawfulPermanentResidentSince = input.LawfulPermanentResidentSince;
+            a.Status = ParseStatus(input.Status) ?? a.Status;
+            a.DecisionDate = input.DecisionDate;
+            a.DecisionNotes = NormalizeNotes(input.DecisionNotes);
+            a.UpdatedAt = DateTime.UtcNow;
 
             if (changes.Count > 0)
             {
@@ -220,15 +210,9 @@ public static class ApplicantEndpoints
              * Withdraw, do not destroy.
              *
              * This used to be db.Applicants.Remove(a), which cascaded through the
-             * applicant's cases, evidence, decisions and — fatally — their entire
-             * CaseEvent audit trail. An audit trail you can delete is not an audit
-             * trail. The row stays in the file; a query filter hides it.
-             *
-             * The applicant's CASES are deliberately left unstamped: their own
-             * query filter chains through Applicant.IsDeleted, so they disappear
-             * anyway, and leaving IsDeleted false on them keeps "hidden because the
-             * applicant was withdrawn" distinct from "this case was deleted on its
-             * own merits" — which is what makes Restore safe.
+             * applicant's cases, evidence and — fatally — their audit trail. An
+             * audit trail you can delete is not an audit trail. The row stays in
+             * the file; a query filter hides it.
              */
             a.IsDeleted = true;
             a.DeletedAt = DateTime.UtcNow;
@@ -275,6 +259,17 @@ public static class ApplicantEndpoints
     private static string? NormalizeMiddle(string? middle) =>
         string.IsNullOrWhiteSpace(middle) ? null : middle.Trim();
 
+    /// <summary>Same fold-blank-to-null treatment for the free-text decision notes.</summary>
+    private static string? NormalizeNotes(string? notes) =>
+        string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+
+    /// <summary>Parse the wire status into the enum, tolerantly; null if blank or unknown.</summary>
+    private static ApplicationStatus? ParseStatus(string? status) =>
+        !string.IsNullOrWhiteSpace(status)
+            && Enum.TryParse<ApplicationStatus>(status.Trim(), ignoreCase: true, out var parsed)
+                ? parsed
+                : null;
+
     private static Dictionary<string, string[]> Validate(ApplicantInput i)
     {
         var errors = new Dictionary<string, string[]>();
@@ -288,11 +283,14 @@ public static class ApplicantEndpoints
         if (string.IsNullOrWhiteSpace(i.AlienNumber))
             errors["alienNumber"] = ["A-Number is required."];
 
-        if (i.DateOfBirth >= DateOnly.FromDateTime(DateTime.UtcNow))
-            errors["dateOfBirth"] = ["Date of birth must be in the past."];
+        if (i.BirthDate >= DateOnly.FromDateTime(DateTime.UtcNow))
+            errors["birthDate"] = ["Date of birth must be in the past."];
 
-        if (i.LawfulPermanentResidentSince < i.DateOfBirth)
-            errors["lawfulPermanentResidentSince"] = ["LPR date cannot precede date of birth."];
+        if (i.AdmissionDate < i.BirthDate)
+            errors["admissionDate"] = ["Admission date cannot precede date of birth."];
+
+        if (!string.IsNullOrWhiteSpace(i.Status) && ParseStatus(i.Status) is null)
+            errors["status"] = ["Unknown status."];
 
         return errors;
     }
@@ -310,21 +308,23 @@ public static class ApplicantEndpoints
         }
 
         Check("A-Number", a.AlienNumber, i.AlienNumber);
+        Check("naturalization number", a.NaturalizationNumber, (i.NaturalizationNumber ?? "").Trim());
+        Check("petition number", a.PetitionNumber, (i.PetitionNumber ?? "").Trim());
         Check("first name", a.FirstName, i.FirstName);
         // Compare the normalised middle so a blank form field ("") vs a null
         // column doesn't log a phantom change on every save.
         Check("middle name", a.MiddleName, NormalizeMiddle(i.MiddleName));
         Check("last name", a.LastName, i.LastName);
-        Check("date of birth", a.DateOfBirth, i.DateOfBirth);
-        Check("country of birth", a.CountryOfBirth, i.CountryOfBirth);
-        Check("nationality", a.Nationality, i.Nationality);
-        Check("address", a.AddressLine, i.AddressLine);
-        Check("city", a.City, i.City);
-        Check("state", a.State, i.State);
-        Check("postal code", a.PostalCode, i.PostalCode);
+        Check("date of birth", a.BirthDate, i.BirthDate);
+        Check("admission date", a.AdmissionDate, i.AdmissionDate);
+        Check("address", a.Address1, i.Address1);
+        Check("town", a.TownCode, i.TownCode);
+        Check("country", a.CountryCode, i.CountryCode);
+        Check("ZIP", a.ZipCode, i.ZipCode);
         Check("email", a.Email, i.Email);
-        Check("phone", a.Phone, i.Phone);
-        Check("LPR date", a.LawfulPermanentResidentSince, i.LawfulPermanentResidentSince);
+        Check("status", a.Status, ParseStatus(i.Status) ?? a.Status);
+        Check("decision date", a.DecisionDate, i.DecisionDate);
+        Check("decision notes", a.DecisionNotes, NormalizeNotes(i.DecisionNotes));
 
         return changed;
     }

@@ -7,37 +7,23 @@ public class NaturalizationDbContext(DbContextOptions<NaturalizationDbContext> o
     : DbContext(options)
 {
     public DbSet<Applicant> Applicants => Set<Applicant>();
-    public DbSet<NaturalizationCase> Cases => Set<NaturalizationCase>();
-    public DbSet<Decision> Decisions => Set<Decision>();
-    public DbSet<EvidenceDocument> Documents => Set<EvidenceDocument>();
-    public DbSet<CaseEvent> Events => Set<CaseEvent>();
+    public DbSet<TownCode> TownCodes => Set<TownCode>();
+    public DbSet<CountryCode> CountryCodes => Set<CountryCode>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
-    public DbSet<OfficerAccount> Officers => Set<OfficerAccount>();
+    public DbSet<ApplicationUser> Users => Set<ApplicationUser>();
 
     /*
-     * On deletion, and why every relationship below says Restrict.
+     * On the applicant query filter.
      *
-     * These four foreign keys used to be Cascade, so `db.Applicants.Remove(a)`
-     * silently destroyed that applicant's cases, evidence, decisions AND their
-     * entire audit trail. Restrict inverts the failure: an accidental hard delete
-     * now THROWS instead of quietly erasing the record of who did what to
-     * someone's citizenship application. Deletion is a soft delete or it does not
-     * happen.
+     * Withdrawing an applicant is a soft delete: the row stays, and a global
+     * query filter (!IsDeleted) hides it from every read path. The one place that
+     * MUST see through it is the A-Number collision check on create — an A-Number
+     * identifies a person and is not released when their record is withdrawn — so
+     * that probe uses IgnoreQueryFilters(). See ApplicantEndpoints.
      *
-     * On the query filters, and why each dependent repeats its principal's.
-     *
-     * A naive filter on NaturalizationCase would be `!x.IsDeleted`. That is a
-     * NullReferenceException waiting to happen: a case whose APPLICANT is
-     * soft-deleted passes such a filter, but `Include(c => c.Applicant)` then
-     * resolves to null (the principal is filtered out) and `c.Applicant.FullName`
-     * blows up with a 500. So every dependent's filter includes its principal's,
-     * all the way up the chain. EF logs
-     * PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning about
-     * exactly this hazard; it is suppressed in Program.cs precisely BECAUSE the
-     * chaining below makes it unreachable.
-     *
-     * Note EF allows only one HasQueryFilter per entity — a second call replaces
-     * the first rather than ANDing with it.
+     * Nothing else carries a filter: the case/decision/evidence tables that once
+     * chained their filters through the applicant's are gone, so the dependent
+     * NullReference hazard EF used to warn about no longer exists.
      */
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -55,89 +41,43 @@ public class NaturalizationDbContext(DbContextOptions<NaturalizationDbContext> o
              */
             e.HasIndex(x => x.AlienNumber).IsUnique();
 
+            e.Property(x => x.NaturalizationNumber).HasMaxLength(24);
+            e.Property(x => x.PetitionNumber).HasMaxLength(24);
             e.Property(x => x.FirstName).HasMaxLength(100).IsRequired();
             e.Property(x => x.MiddleName).HasMaxLength(100);
             e.Property(x => x.LastName).HasMaxLength(100).IsRequired();
-            e.Property(x => x.CountryOfBirth).HasMaxLength(100);
-            e.Property(x => x.Nationality).HasMaxLength(100);
+            e.Property(x => x.Address1).HasMaxLength(200);
+            e.Property(x => x.TownCode).HasMaxLength(3);
+            e.Property(x => x.CountryCode).HasMaxLength(3);
+            e.Property(x => x.ZipCode).HasMaxLength(16);
             e.Property(x => x.Email).HasMaxLength(200);
+            e.Property(x => x.DecisionNotes).HasMaxLength(2000);
             e.Property(x => x.DeletedBy).HasMaxLength(120);
+
+            // Store the status as text so the DB stays readable and insertion-order safe.
+            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
+            e.HasIndex(x => x.Status);
 
             e.HasIndex(x => x.IsDeleted);
             e.HasQueryFilter(x => !x.IsDeleted);
         });
 
-        b.Entity<NaturalizationCase>(e =>
+        // Town and country lookups share a shape. Code is short; index it (plus
+        // BaseCode) so a lookup by code is a seek, not a scan.
+        b.Entity<TownCode>(e =>
         {
-            e.Property(x => x.ReceiptNumber).HasMaxLength(24).IsRequired();
-            e.HasIndex(x => x.ReceiptNumber).IsUnique();   // unfiltered, as above
-            e.Property(x => x.FieldOffice).HasMaxLength(100);
-            e.Property(x => x.DeletedBy).HasMaxLength(120);
-
-            // Store enums as text so the DB stays readable and insertion-order safe.
-            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
-            e.HasIndex(x => x.Status);
-
-            e.HasOne(x => x.Applicant)
-                .WithMany(a => a.Cases)
-                .HasForeignKey(x => x.ApplicantId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            e.HasQueryFilter(x => !x.IsDeleted && !x.Applicant.IsDeleted);
+            e.Property(x => x.BaseCode).HasMaxLength(1).IsRequired();
+            e.Property(x => x.Code).HasMaxLength(3).IsRequired();
+            e.Property(x => x.Description).HasMaxLength(200).IsRequired();
+            e.HasIndex(x => new { x.BaseCode, x.Code }).IsUnique();
         });
 
-        b.Entity<Decision>(e =>
+        b.Entity<CountryCode>(e =>
         {
-            e.Property(x => x.Outcome).HasConversion<string>().HasMaxLength(16);
-            e.Property(x => x.DecidedBy).HasMaxLength(120);
-            e.Property(x => x.Rationale).HasMaxLength(2000);
-            e.Property(x => x.DenialReasonCode).HasMaxLength(64);
-
-            // One decision per case, enforced by the database rather than by convention.
-            e.HasOne(x => x.Case)
-                .WithOne(c => c.Decision!)
-                .HasForeignKey<Decision>(x => x.CaseId)
-                .OnDelete(DeleteBehavior.Restrict);
-            e.HasIndex(x => x.CaseId).IsUnique();
-
-            e.HasQueryFilter(x => !x.Case.IsDeleted && !x.Case.Applicant.IsDeleted);
-        });
-
-        b.Entity<EvidenceDocument>(e =>
-        {
-            e.Property(x => x.DocumentType).HasMaxLength(120);
-            e.Property(x => x.FileName).HasMaxLength(260);
-            e.Property(x => x.ContentType).HasMaxLength(120);
-            e.Property(x => x.Sha256).HasMaxLength(64);
-            e.Property(x => x.Status).HasConversion<string>().HasMaxLength(16);
-
-            e.HasOne(x => x.Case)
-                .WithMany(c => c.Documents)
-                .HasForeignKey(x => x.CaseId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            e.HasQueryFilter(x => !x.Case.IsDeleted && !x.Case.Applicant.IsDeleted);
-        });
-
-        b.Entity<CaseEvent>(e =>
-        {
-            e.Property(x => x.EventType).HasMaxLength(120);
-            e.Property(x => x.Actor).HasMaxLength(120);
-            e.Property(x => x.Notes).HasMaxLength(1000);
-
-            e.HasOne(x => x.Case)
-                .WithMany(c => c.Events)
-                .HasForeignKey(x => x.CaseId)
-                .OnDelete(DeleteBehavior.Restrict);
-            e.HasIndex(x => x.OccurredAt);
-
-            /*
-             * Hidden when the case is withdrawn, but still in the file. The rows
-             * survive; only the read paths stop returning them. To read the trail
-             * of a withdrawn record, IgnoreQueryFilters() — which is exactly what
-             * the soft-delete tests assert.
-             */
-            e.HasQueryFilter(x => !x.Case.IsDeleted && !x.Case.Applicant.IsDeleted);
+            e.Property(x => x.BaseCode).HasMaxLength(1).IsRequired();
+            e.Property(x => x.Code).HasMaxLength(3).IsRequired();
+            e.Property(x => x.Description).HasMaxLength(200).IsRequired();
+            e.HasIndex(x => new { x.BaseCode, x.Code }).IsUnique();
         });
 
         // Append-only. No FK, no soft-delete flag, no query filter: this must
@@ -153,15 +93,20 @@ public class NaturalizationDbContext(DbContextOptions<NaturalizationDbContext> o
             e.HasIndex(x => x.OccurredAt);
         });
 
-        b.Entity<OfficerAccount>(e =>
+        b.Entity<ApplicationUser>(e =>
         {
+            // The DbSet is named Users for a concise db.Users, but the table is
+            // ApplicationUsers — pin it so the two never drift and the migration
+            // (which creates ApplicationUsers) matches the runtime model.
+            e.ToTable("ApplicationUsers");
+
             e.Property(x => x.Email).HasMaxLength(200).IsRequired();
             e.HasIndex(x => x.Email).IsUnique();
             e.Property(x => x.FullName).HasMaxLength(200).IsRequired();
             e.Property(x => x.FieldOffice).HasMaxLength(100);
 
-            // Stored as text, like every other enum in the model: readable in the
-            // database and safe against members being reordered.
+            // Stored as text, like the status: readable in the database and safe
+            // against members being reordered.
             e.Property(x => x.Role).HasConversion<string>().HasMaxLength(16).IsRequired();
 
             e.Property(x => x.PasswordHash).HasMaxLength(256).IsRequired();

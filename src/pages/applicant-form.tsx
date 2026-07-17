@@ -8,36 +8,74 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { ApiError, api, type ApplicantInput } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
-import { canManageApplicants } from '@/lib/types'
+import {
+  APPLICATION_STATUSES,
+  STATUS_LABELS,
+  canManageApplicants,
+  type ApplicationStatus,
+  type Lookup,
+} from '@/lib/types'
 
 /*
  * Add and edit an applicant. One component, two routes (/applicants/new and
  * /applicants/:id/edit), because the two forms differ only in what they are
- * seeded with and which verb they submit — and a duplicated 12-field form is a
- * duplicated 12-field form to keep in sync forever.
+ * seeded with and which verb they submit.
  */
 
-const EMPTY: ApplicantInput = {
+/*
+ * The form's own shape. It differs from ApplicantInput in one place: decisionDate
+ * is a plain string here (an empty <input type=date> is ""), and is folded to
+ * null on submit — the API's DateOnly? cannot parse "".
+ */
+type FormState = {
+  alienNumber: string
+  naturalizationNumber: string
+  petitionNumber: string
+  firstName: string
+  middleName: string
+  lastName: string
+  birthDate: string
+  admissionDate: string
+  address1: string
+  townCode: string
+  countryCode: string
+  zipCode: string
+  email: string
+  status: ApplicationStatus
+  decisionDate: string
+  decisionNotes: string
+}
+
+const EMPTY: FormState = {
   alienNumber: '',
+  naturalizationNumber: '',
+  petitionNumber: '',
   firstName: '',
   middleName: '',
   lastName: '',
-  dateOfBirth: '',
-  countryOfBirth: '',
-  nationality: '',
-  addressLine: '',
-  city: '',
-  state: '',
-  postalCode: '',
+  birthDate: '',
+  admissionDate: '',
+  address1: '',
+  townCode: '',
+  countryCode: '',
+  zipCode: '',
   email: '',
-  phone: '',
-  lawfulPermanentResidentSince: '',
+  status: 'Received',
+  decisionDate: '',
+  decisionNotes: '',
 }
 
 /** Field-level errors as the API returns them (RFC7807 `errors`), keyed by camelCase field. */
-type FieldErrors = Partial<Record<keyof ApplicantInput, string>>
+type FieldErrors = Partial<Record<keyof FormState, string>>
 
 export function ApplicantFormPage() {
   const { id } = useParams()
@@ -46,10 +84,28 @@ export function ApplicantFormPage() {
   const editing = id !== undefined
   const allowed = canManageApplicants(officer)
 
-  const [form, setForm] = useState<ApplicantInput>(EMPTY)
+  const [form, setForm] = useState<FormState>(EMPTY)
   const [errors, setErrors] = useState<FieldErrors>({})
   const [loading, setLoading] = useState(editing)
   const [saving, setSaving] = useState(false)
+  const [towns, setTowns] = useState<Lookup[]>([])
+  const [countries, setCountries] = useState<Lookup[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([api.lookups.towns(), api.lookups.countries()])
+      .then(([t, c]) => {
+        if (cancelled) return
+        setTowns(t)
+        setCountries(c)
+      })
+      .catch(() => {
+        /* Non-fatal: the pickers just render empty. */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     if (!editing) return
@@ -59,9 +115,24 @@ export function ApplicantFormPage() {
       .get(Number(id))
       .then((a) => {
         if (cancelled) return
-        // Drop the server-owned/computed fields; the rest of the shape is the form's.
-        const { id: _id, createdAt: _createdAt, fullName: _fullName, ...rest } = a
-        setForm(rest)
+        setForm({
+          alienNumber: a.alienNumber,
+          naturalizationNumber: a.naturalizationNumber,
+          petitionNumber: a.petitionNumber,
+          firstName: a.firstName,
+          middleName: a.middleName,
+          lastName: a.lastName,
+          birthDate: a.birthDate,
+          admissionDate: a.admissionDate,
+          address1: a.address1,
+          townCode: a.townCode,
+          countryCode: a.countryCode,
+          zipCode: a.zipCode,
+          email: a.email,
+          status: a.status,
+          decisionDate: a.decisionDate ?? '',
+          decisionNotes: a.decisionNotes,
+        })
       })
       .catch((e: unknown) => {
         if (!cancelled) toast.error(e instanceof Error ? e.message : 'Could not load applicant.')
@@ -75,10 +146,14 @@ export function ApplicantFormPage() {
     }
   }, [id, editing])
 
-  const set = (field: keyof ApplicantInput) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm((f) => ({ ...f, [field]: e.target.value }))
-    // Clear the error as soon as they start fixing it, rather than leaving it
-    // red until they submit again.
+  const set =
+    (field: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      setForm((f) => ({ ...f, [field]: e.target.value }))
+      setErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev))
+    }
+
+  const setValue = (field: keyof FormState) => (value: string) => {
+    setForm((f) => ({ ...f, [field]: value }))
     setErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev))
   }
 
@@ -87,23 +162,22 @@ export function ApplicantFormPage() {
     setSaving(true)
     setErrors({})
 
+    // Fold the empty decision date to null; the API's DateOnly? can't parse "".
+    const body: ApplicantInput = { ...form, decisionDate: form.decisionDate || null }
+
     try {
       const saved = editing
-        ? await api.applicants.update(Number(id), form)
-        : await api.applicants.create(form)
+        ? await api.applicants.update(Number(id), body)
+        : await api.applicants.create(body)
 
       toast.success(editing ? 'Applicant updated.' : `${saved.fullName} added to the register.`)
       navigate(`/applicants/${saved.id}`)
     } catch (e: unknown) {
-      /*
-       * A 409 is the interesting one: it means this A-Number belongs to a
-       * WITHDRAWN applicant, and the API is telling us to restore that record
-       * rather than create a duplicate person. Surfacing the server's message
-       * verbatim is right here — it names the record and says what to do.
-       */
       if (e instanceof ApiError && e.status === 403) {
         toast.error('Your role does not permit changing applicant records.')
       } else if (e instanceof ApiError && e.status === 409) {
+        // A 409 means this A-Number belongs to a WITHDRAWN applicant; surface the
+        // server's message verbatim — it names the record and says what to do.
         setErrors({ alienNumber: e.message })
         toast.error('That A-Number is already on file.')
       } else if (e instanceof ApiError && Object.keys(e.fields).length > 0) {
@@ -123,7 +197,7 @@ export function ApplicantFormPage() {
 
   // A read-only Viewer can reach this route by typing the URL even though the
   // Edit / New buttons are hidden for them. Block it here too — the API would
-  // return a 403 on save anyway, so there is nothing to gain from the form.
+  // return a 403 on save anyway.
   if (!allowed) {
     return (
       <div className="mx-auto max-w-3xl space-y-6">
@@ -196,6 +270,7 @@ export function ApplicantFormPage() {
                 />
               </div>
             </div>
+
             <Field
               id="alienNumber"
               label="A-Number"
@@ -206,68 +281,84 @@ export function ApplicantFormPage() {
               required
             />
             <Field
-              id="dateOfBirth"
+              id="petitionNumber"
+              label="Petition number"
+              value={form.petitionNumber}
+              onChange={set('petitionNumber')}
+              error={errors.petitionNumber}
+              placeholder="NBC2024123456"
+            />
+            <Field
+              id="naturalizationNumber"
+              label="Naturalization number"
+              value={form.naturalizationNumber}
+              onChange={set('naturalizationNumber')}
+              error={errors.naturalizationNumber}
+            />
+            <SelectField
+              id="status"
+              label="Status"
+              value={form.status}
+              onValueChange={setValue('status')}
+              error={errors.status}
+              options={APPLICATION_STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] }))}
+            />
+
+            <Field
+              id="birthDate"
               label="Date of birth"
               type="date"
-              value={form.dateOfBirth}
-              onChange={set('dateOfBirth')}
-              error={errors.dateOfBirth}
+              value={form.birthDate}
+              onChange={set('birthDate')}
+              error={errors.birthDate}
               required
             />
             <Field
-              id="lawfulPermanentResidentSince"
-              label="LPR since"
+              id="admissionDate"
+              label="Admission date"
               type="date"
-              value={form.lawfulPermanentResidentSince}
-              onChange={set('lawfulPermanentResidentSince')}
-              error={errors.lawfulPermanentResidentSince}
-              hint="Start of the continuous-residence clock (INA 316(a))."
+              value={form.admissionDate}
+              onChange={set('admissionDate')}
+              error={errors.admissionDate}
+              hint="Date admitted as an LPR — start of the continuous-residence clock (INA 316(a))."
               required
-            />
-            <Field
-              id="countryOfBirth"
-              label="Country of birth"
-              value={form.countryOfBirth}
-              onChange={set('countryOfBirth')}
-              error={errors.countryOfBirth}
-            />
-            <Field
-              id="nationality"
-              label="Nationality"
-              value={form.nationality}
-              onChange={set('nationality')}
-              error={errors.nationality}
             />
 
             <div className="@2xl:col-span-2">
               <Field
-                id="addressLine"
+                id="address1"
                 label="Address"
-                value={form.addressLine}
-                onChange={set('addressLine')}
-                error={errors.addressLine}
+                value={form.address1}
+                onChange={set('address1')}
+                error={errors.address1}
               />
             </div>
 
-            <Field id="city" label="City" value={form.city} onChange={set('city')} error={errors.city} />
-
-            <div className="grid grid-cols-2 gap-4">
-              <Field
-                id="state"
-                label="State"
-                value={form.state}
-                onChange={set('state')}
-                error={errors.state}
-              />
-              <Field
-                id="postalCode"
-                label="ZIP"
-                value={form.postalCode}
-                onChange={set('postalCode')}
-                error={errors.postalCode}
-              />
-            </div>
-
+            <SelectField
+              id="townCode"
+              label="Town"
+              value={form.townCode}
+              onValueChange={setValue('townCode')}
+              error={errors.townCode}
+              placeholder="Select a town…"
+              options={towns.map((t) => ({ value: t.code, label: t.description }))}
+            />
+            <SelectField
+              id="countryCode"
+              label="Country"
+              value={form.countryCode}
+              onValueChange={setValue('countryCode')}
+              error={errors.countryCode}
+              placeholder="Select a country…"
+              options={countries.map((c) => ({ value: c.code, label: c.description }))}
+            />
+            <Field
+              id="zipCode"
+              label="ZIP"
+              value={form.zipCode}
+              onChange={set('zipCode')}
+              error={errors.zipCode}
+            />
             <Field
               id="email"
               label="Email"
@@ -276,13 +367,26 @@ export function ApplicantFormPage() {
               onChange={set('email')}
               error={errors.email}
             />
+
             <Field
-              id="phone"
-              label="Phone"
-              value={form.phone}
-              onChange={set('phone')}
-              error={errors.phone}
+              id="decisionDate"
+              label="Decision date"
+              type="date"
+              value={form.decisionDate}
+              onChange={set('decisionDate')}
+              error={errors.decisionDate}
+              hint="Leave blank until the application is decided."
             />
+            <div />
+            <div className="@2xl:col-span-2">
+              <Field
+                id="decisionNotes"
+                label="Decision notes"
+                value={form.decisionNotes}
+                onChange={set('decisionNotes')}
+                error={errors.decisionNotes}
+              />
+            </div>
           </CardContent>
         </Card>
 
@@ -311,7 +415,7 @@ function Field({
   placeholder,
   required,
 }: {
-  id: keyof ApplicantInput
+  id: keyof FormState
   label: string
   value: string
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
@@ -349,6 +453,56 @@ function Field({
           {hint}
         </p>
       ) : null}
+    </div>
+  )
+}
+
+function SelectField({
+  id,
+  label,
+  value,
+  onValueChange,
+  options,
+  error,
+  placeholder,
+  required,
+}: {
+  id: keyof FormState
+  label: string
+  value: string
+  onValueChange: (value: string) => void
+  options: { value: string; label: string }[]
+  error?: string
+  placeholder?: string
+  required?: boolean
+}) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>
+        {label}
+        {required && <span className="text-destructive ml-0.5">*</span>}
+      </Label>
+      <Select value={value} onValueChange={onValueChange}>
+        <SelectTrigger
+          id={id}
+          className={error ? 'border-destructive w-full' : 'w-full'}
+          aria-invalid={error ? true : undefined}
+        >
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((o) => (
+            <SelectItem key={o.value} value={o.value}>
+              {o.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {error && (
+        <p id={`${id}-error`} className="text-destructive text-xs">
+          {error}
+        </p>
+      )}
     </div>
   )
 }

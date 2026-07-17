@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.OpenApi.Models;
 using Naturalization.Api.Auth;
 using Naturalization.Api.Data;
@@ -17,24 +16,12 @@ var builder = WebApplication.CreateBuilder(args);
 var connection = builder.Configuration.GetConnectionString("Default")
     ?? "Data Source=naturalization.db";
 
-builder.Services.AddDbContext<NaturalizationDbContext>(o => o
-    .UseSqlite(connection)
-    /*
-     * EF warns that Case, Decision, EvidenceDocument and CaseEvent each have a
-     * REQUIRED navigation to a principal that carries a query filter, because the
-     * naive version of that model hands you a dependent whose required parent has
-     * been filtered away — i.e. a null reference where the type system promised
-     * you an object.
-     *
-     * Suppressed because the model deliberately avoids exactly that: every
-     * dependent's filter INCLUDES its principal's (see OnModelCreating), so a
-     * dependent can never come back without its parent. Suppressed knowingly,
-     * not swept under the rug.
-     */
-    .ConfigureWarnings(w => w.Ignore(
-        CoreEventId.PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning)));
+// The old required-navigation-with-query-filter warning suppression went away
+// with the case/decision/evidence tables it protected: the applicant is now the
+// only soft-deletable entity, and nothing depends on it through a required FK.
+builder.Services.AddDbContext<NaturalizationDbContext>(o => o.UseSqlite(connection));
 
-builder.Services.AddScoped<CaseMetrics>();
+builder.Services.AddScoped<ApplicantMetrics>();
 builder.Services.AddScoped<IReportGenerator, MigraDocReportGenerator>();
 
 // --- Authentication ----------------------------------------------------------
@@ -124,17 +111,17 @@ using (var scope = app.Services.CreateScope())
      */
     await db.Database.MigrateAsync();
 
-    // Officers are infrastructure, not fixtures: a database with no officer in it
-    // is an API that nobody can log into. Always seeded.
-    await DbInitializer.SeedOfficersAsync(
-        db, scope.ServiceProvider.GetRequiredService<IPasswordHasher<OfficerAccount>>());
+    // Users are infrastructure, not fixtures: a database with no account in it is
+    // an API that nobody can log into. Always seeded.
+    await DbInitializer.SeedUsersAsync(
+        db, scope.ServiceProvider.GetRequiredService<IPasswordHasher<ApplicationUser>>());
 
-    // The 40-applicant demo caseload IS a fixture. Read from app.Configuration
-    // (i.e. after Build()) so the integration-test host can switch it off and get
-    // a clean database.
+    // The demo register (lookups + applicants) IS a fixture. Read from
+    // app.Configuration (i.e. after Build()) so the integration-test host can
+    // switch it off and get a clean database.
     if (app.Configuration.GetValue("Seed:Demo", true))
     {
-        await DbInitializer.SeedDemoCaseloadAsync(db);
+        await DbInitializer.SeedDemoApplicantsAsync(db);
     }
 }
 
@@ -175,17 +162,14 @@ app.MapGet("/health", () => TypedResults.Ok(new { status = "ok" }))
     .AllowAnonymous();
 
 /*
- * This build is scoped to applicants + reports. The case queue, status
- * transitions, decisions and evidence endpoints live on the
- * `enhancement/case-workflow` branch.
- *
- * The case/decision/document DOMAIN, DbSets, CaseMetrics and StatusTransitions
- * all deliberately remain: the reports read them (the Case Record PDF prints a
- * case's audit trail; Pipeline reads the whole caseload). Only the HTTP surface
- * that let a caller mutate them was removed.
+ * The streamlined model: the applicant register is the whole system. The case,
+ * decision and evidence tables were folded into the applicant row (status,
+ * decision date and notes now live there), and town and country moved to lookup
+ * tables. Applicants, the lookups and the reports are the entire HTTP surface.
  */
 app.MapAuth();
 app.MapApplicants();
+app.MapLookups();
 app.MapReports();
 
 app.Run();

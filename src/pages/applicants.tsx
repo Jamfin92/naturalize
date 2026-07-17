@@ -29,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { StatusBadge } from '@/components/status-badge'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { canManageApplicants, canWithdrawApplicants, type Applicant } from '@/lib/types'
@@ -47,6 +48,11 @@ export function ApplicantsPage() {
     () => api.applicants.list({ q: search, page, pageSize: PAGE_SIZE }),
     [search, page],
   )
+
+  // Country is stored as a code; resolve it to a name for display. Loaded once.
+  const countries = useAsync(() => api.lookups.countries(), [])
+  const countryName = (code: string) =>
+    countries.data?.find((c) => c.code === code)?.description ?? code
 
   /*
    * The row actions are the point of this screen for anyone who can change a
@@ -135,9 +141,9 @@ export function ApplicantsPage() {
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
                   <TableHead>Name</TableHead>
                   <TableHead>A-Number</TableHead>
-                  <TableHead className="hidden @2xl:table-cell">Country of birth</TableHead>
-                  <TableHead className="hidden @3xl:table-cell">LPR since</TableHead>
-                  <TableHead className="hidden @4xl:table-cell">Residence</TableHead>
+                  <TableHead className="hidden @2xl:table-cell">Country</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="hidden @3xl:table-cell">Admitted</TableHead>
                   {showActions && (
                     <TableHead className="w-0 text-right">
                       <span className="sr-only">Actions</span>
@@ -159,12 +165,12 @@ export function ApplicantsPage() {
                     <TableCell className="text-muted-foreground font-mono text-xs">
                       {a.alienNumber}
                     </TableCell>
-                    <TableCell className="hidden @2xl:table-cell">{a.countryOfBirth}</TableCell>
-                    <TableCell className="text-muted-foreground hidden text-sm @3xl:table-cell">
-                      {new Date(a.lawfulPermanentResidentSince).toLocaleDateString()}
+                    <TableCell className="hidden @2xl:table-cell">{countryName(a.countryCode)}</TableCell>
+                    <TableCell>
+                      <StatusBadge status={a.status} />
                     </TableCell>
-                    <TableCell className="text-muted-foreground hidden text-sm @4xl:table-cell">
-                      {a.city}, {a.state}
+                    <TableCell className="text-muted-foreground hidden text-sm @3xl:table-cell">
+                      {new Date(a.admissionDate).toLocaleDateString()}
                     </TableCell>
                     {showActions && (
                       <TableCell className="text-right">
@@ -232,10 +238,9 @@ export function ApplicantsPage() {
 
       {/*
        * Withdrawing from the register is a soft delete — the same one the detail
-       * page offers — so the confirmation says as much: the record, its cases,
-       * its evidence and its audit trail all remain on file and an administrator
-       * can restore it. Only officers who canWithdraw ever reach this dialog, and
-       * the API enforces that regardless.
+       * page offers — so the confirmation says as much: the record and its audit
+       * trail remain on file and an administrator can restore it. Only users who
+       * canWithdraw ever reach this dialog, and the API enforces that regardless.
        */}
       <Dialog open={pendingWithdraw !== null} onOpenChange={(open) => !open && setPendingWithdraw(null)}>
         <DialogContent>
@@ -245,9 +250,8 @@ export function ApplicantsPage() {
               <div className="space-y-2 text-sm">
                 <p>
                   The record will no longer appear in the register or in reports. It is{' '}
-                  <strong>not destroyed</strong>: the applicant, their cases, their evidence and
-                  their full audit trail all remain on file, and the withdrawal itself is recorded
-                  against your name.
+                  <strong>not destroyed</strong>: the applicant record and its full audit trail
+                  remain on file, and the withdrawal itself is recorded against your name.
                 </p>
                 <p>An administrator can restore the record afterwards.</p>
               </div>
