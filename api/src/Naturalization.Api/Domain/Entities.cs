@@ -136,6 +136,28 @@ public class CountryCode
 }
 
 /// <summary>
+/// A city lookup, addressable three ways: by its surrogate <see cref="Id"/>, by
+/// <see cref="ZipCode"/>, and by <see cref="Name"/>.
+///
+/// Unlike <see cref="TownCode"/> and <see cref="CountryCode"/>, which are reached
+/// through a short opaque code, a city is reached by whichever natural key the
+/// caller happens to hold — the primary key, the ZIP, or the name — so all three
+/// are indexed. A ZIP identifies a single city, so its index is unique; a city
+/// spans many ZIPs, so <see cref="Name"/> is indexed but not unique. See
+/// NaturalizationDbContext.OnModelCreating.
+/// </summary>
+public class City
+{
+    public int Id { get; set; }
+
+    /// <summary>Postal ZIP code, e.g. "02139". Unique — one city per ZIP.</summary>
+    public string ZipCode { get; set; } = "";
+
+    /// <summary>City name, e.g. "Cambridge". Indexed for lookup by name.</summary>
+    public string Name { get; set; } = "";
+}
+
+/// <summary>
 /// System-level audit log: who touched which row, and when.
 ///
 /// Deliberately has no foreign key, no soft-delete flag and no query filter: it

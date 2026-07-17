@@ -9,6 +9,7 @@ public class NaturalizationDbContext(DbContextOptions<NaturalizationDbContext> o
     public DbSet<Applicant> Applicants => Set<Applicant>();
     public DbSet<TownCode> TownCodes => Set<TownCode>();
     public DbSet<CountryCode> CountryCodes => Set<CountryCode>();
+    public DbSet<City> Cities => Set<City>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<ApplicationUser> Users => Set<ApplicationUser>();
 
@@ -78,6 +79,17 @@ public class NaturalizationDbContext(DbContextOptions<NaturalizationDbContext> o
             e.Property(x => x.Code).HasMaxLength(3).IsRequired();
             e.Property(x => x.Description).HasMaxLength(200).IsRequired();
             e.HasIndex(x => new { x.BaseCode, x.Code }).IsUnique();
+        });
+
+        // City lookup, reachable by all three of its keys. Id is the primary key;
+        // ZipCode and Name each get an index so a lookup by either is a seek, not a
+        // scan. A ZIP maps to one city (unique); a city spans many ZIPs (not).
+        b.Entity<City>(e =>
+        {
+            e.Property(x => x.ZipCode).HasMaxLength(16).IsRequired();
+            e.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            e.HasIndex(x => x.ZipCode).IsUnique();
+            e.HasIndex(x => x.Name);
         });
 
         // Append-only. No FK, no soft-delete flag, no query filter: this must
