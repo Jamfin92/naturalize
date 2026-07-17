@@ -5,9 +5,9 @@ using Naturalization.Api.Dtos;
 namespace Naturalization.Api.Endpoints;
 
 /// <summary>
-/// The town and country lookups behind <see cref="Domain.Applicant.TownCode"/>
-/// and <see cref="Domain.Applicant.CountryCode"/>. The SPA reads these to turn a
-/// stored code into a human label, and to populate the pickers on the form.
+/// The lookups the SPA reads to populate the pickers on the applicant form: the
+/// residential localities behind <see cref="Domain.Applicant.LocalityId"/>, and
+/// the country-of-birth codes behind <see cref="Domain.Applicant.CountryCode"/>.
 /// </summary>
 public static class LookupEndpoints
 {
@@ -17,16 +17,16 @@ public static class LookupEndpoints
             .WithTags("Lookups")
             .RequireAuthorization();
 
-        g.MapGet("/towns", async (NaturalizationDbContext db) =>
+        g.MapGet("/localities", async (NaturalizationDbContext db) =>
         {
-            var towns = await db.TownCodes.AsNoTracking()
-                .OrderBy(t => t.Description)
-                .Select(t => LookupDto.From(t))
+            var localities = await db.Localities.AsNoTracking()
+                .OrderBy(l => l.Name).ThenBy(l => l.State)
+                .Select(l => LocalityDto.From(l))
                 .ToListAsync();
-            return TypedResults.Ok(towns);
+            return TypedResults.Ok(localities);
         })
-        .WithName("ListTownCodes")
-        .WithSummary("Every town code, ordered by description.");
+        .WithName("ListLocalities")
+        .WithSummary("Every residential locality (ZIP, city/town, state), ordered by name.");
 
         g.MapGet("/countries", async (NaturalizationDbContext db) =>
         {

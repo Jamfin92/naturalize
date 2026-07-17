@@ -1,5 +1,5 @@
 import { clearToken, getToken } from './token'
-import type { Applicant, AuditEvent, Lookup, Officer, Paged } from './types'
+import type { Applicant, AuditEvent, Locality, Lookup, Officer, Paged } from './types'
 
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5099'
 
@@ -171,7 +171,7 @@ export const api = {
   },
 
   lookups: {
-    towns: () => request<Lookup[]>('/api/lookups/towns'),
+    localities: () => request<Locality[]>('/api/lookups/localities'),
     countries: () => request<Lookup[]>('/api/lookups/countries'),
   },
 
@@ -185,8 +185,9 @@ export const api = {
 }
 
 // `fullName` is server-composed and read-only, so the client never sends it;
-// createdAt / updatedAt are server-owned.
+// createdAt / updatedAt are server-owned; city / state / zipCode are read back
+// from the joined Locality, so the client sends only localityId for residence.
 export type ApplicantInput = Omit<
   Applicant,
-  'id' | 'createdAt' | 'updatedAt' | 'fullName'
+  'id' | 'createdAt' | 'updatedAt' | 'fullName' | 'city' | 'state' | 'zipCode'
 >

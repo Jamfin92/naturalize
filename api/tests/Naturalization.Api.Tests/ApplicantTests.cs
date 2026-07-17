@@ -36,6 +36,18 @@ public class ApplicantTests(ApiFactory factory) : IClassFixture<ApiFactory>
     {
         var client = await factory.SignedInAsync();
 
+        // A locality to move the applicant to — residence is a FK now, so the
+        // target row must exist. The sample applicant starts with none.
+        int localityId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<NaturalizationDbContext>();
+            var loc = new Locality { ZipCode = "02139", Name = "Cambridge", State = "MA" };
+            db.Localities.Add(loc);
+            await db.SaveChangesAsync();
+            localityId = loc.Id;
+        }
+
         var created = await client.PostAsJsonAsync("/api/applicants",
             TestClient.SampleApplicant("A200300400", "Editable Person"));
         var applicant = await created.Content.ReadFromJsonAsync<TestClient.ApplicantResponse>();
@@ -50,9 +62,8 @@ public class ApplicantTests(ApiFactory factory) : IClassFixture<ApiFactory>
             birthDate = "1988-03-14",
             admissionDate = "2016-06-01",
             address1 = "1 Test St",
-            townCode = "002", // changed from the sample's "001"
+            localityId, // moved from no locality to Cambridge
             countryCode = "001",
-            zipCode = "02101",
             email = "test@example.com",
             status = "Received",
         });
@@ -61,7 +72,7 @@ public class ApplicantTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var history = await client.GetFromJsonAsync<List<TestClient.AuditEventResponse>>(
             $"/api/applicants/{applicant.Id}/history");
 
-        Assert.Contains(history!, e => e.Action == "Updated" && e.Summary.Contains("town"));
+        Assert.Contains(history!, e => e.Action == "Updated" && e.Summary.Contains("residence"));
     }
 
     [Fact]

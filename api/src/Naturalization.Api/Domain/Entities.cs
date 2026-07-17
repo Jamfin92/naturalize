@@ -24,9 +24,10 @@ public interface ISoftDeletable
 /// cref="Status"/>) and how it was decided (<see cref="DecisionDate"/> /
 /// <see cref="DecisionNotes"/>).
 ///
-/// Town and country are stored as <em>codes</em> (see <see cref="TownCode"/> and
-/// <see cref="CountryCode"/>), not free text, so the register speaks one
-/// vocabulary and the lookups can be maintained in one place.
+/// Residence points at a <see cref="Domain.Locality"/> row by foreign key (<see
+/// cref="LocalityId"/>) — that one table carries the ZIP, city/town name and
+/// state together, so the register speaks one vocabulary for an address. Country
+/// of <em>birth</em> is separate and stays a code (<see cref="CountryCode"/>).
 /// </summary>
 public class Applicant : ISoftDeletable
 {
@@ -70,13 +71,23 @@ public class Applicant : ISoftDeletable
 
     public string Address1 { get; set; } = "";
 
-    /// <summary>Town code — the <see cref="Domain.TownCode.Code"/> of a TownCode row.</summary>
-    public string TownCode { get; set; } = "";
+    /// <summary>
+    /// Residential locality — foreign key to a <see cref="Domain.Locality"/> row,
+    /// which carries the ZIP, city/town name and state. Nullable: a record may be
+    /// entered before its locality is resolved. Replaces the former free-text
+    /// TownCode + ZipCode pair.
+    /// </summary>
+    public int? LocalityId { get; set; }
 
-    /// <summary>Country code — the <see cref="Domain.CountryCode.Code"/> of a CountryCode row.</summary>
+    /// <summary>The resolved locality, or null. Loaded via Include on read paths.</summary>
+    public Locality? Locality { get; set; }
+
+    /// <summary>
+    /// Country code — the <see cref="Domain.CountryCode.Code"/> of a CountryCode
+    /// row. This is country of <em>birth</em>, not part of the mailing address.
+    /// </summary>
     public string CountryCode { get; set; } = "";
 
-    public string ZipCode { get; set; } = "";
     public string Email { get; set; } = "";
 
     /// <summary>Where the application stands in its lifecycle.</summary>
@@ -99,34 +110,44 @@ public class Applicant : ISoftDeletable
 }
 
 /// <summary>
-/// A town lookup. <see cref="BaseCode"/> is "T" for every row here — it exists so
-/// TownCode and <see cref="CountryCode"/> share one shape and could, if ever
-/// wanted, be read from one place. <see cref="Code"/> is the short (≤3 char)
-/// token stored on <see cref="Applicant.TownCode"/>; <see cref="Description"/> is
-/// what a human reads.
+/// A residential locality — the single reference for an applicant's city/town,
+/// state and ZIP. Referenced from <see cref="Applicant.LocalityId"/>.
+///
+/// This is the "better way to organise addresses" that replaced the old
+/// overlapping pair: a TownCode lookup (which named the town) and a free-text ZIP
+/// on the applicant both described the same place with no integrity between them.
+/// One row here is one postal place — keyed uniquely by <see cref="ZipCode"/>,
+/// carrying the <see cref="Name"/> (city/town) and <see cref="State"/> — so a
+/// mailing label reads "Name, State ZIP" from a single source of truth.
+///
+/// It is addressable three ways: by the surrogate <see cref="Id"/> (how the
+/// applicant FK points at it), by <see cref="ZipCode"/>, and by <see
+/// cref="Name"/>; the latter two are indexed. See
+/// NaturalizationDbContext.OnModelCreating.
 /// </summary>
-public class TownCode
+public class Locality
 {
     public int Id { get; set; }
 
-    /// <summary>"T" for a town. (Countries carry "C".)</summary>
-    public string BaseCode { get; set; } = "T";
+    /// <summary>Postal ZIP code, e.g. "02139". Unique — one row per ZIP.</summary>
+    public string ZipCode { get; set; } = "";
 
-    /// <summary>Up to three characters, mapping to <see cref="Applicant.TownCode"/>.</summary>
-    public string Code { get; set; } = "";
+    /// <summary>City or town name, e.g. "Cambridge". Indexed for lookup by name.</summary>
+    public string Name { get; set; } = "";
 
-    public string Description { get; set; } = "";
+    /// <summary>Two-letter USPS state code, e.g. "MA".</summary>
+    public string State { get; set; } = "";
 }
 
 /// <summary>
-/// A country lookup. <see cref="BaseCode"/> is "C" for every row. Same shape as
-/// <see cref="TownCode"/>; <see cref="Code"/> maps to <see cref="Applicant.CountryCode"/>.
+/// A country lookup. <see cref="BaseCode"/> is "C" for every row. <see
+/// cref="Code"/> maps to <see cref="Applicant.CountryCode"/> (country of birth).
 /// </summary>
 public class CountryCode
 {
     public int Id { get; set; }
 
-    /// <summary>"C" for a country. (Towns carry "T".)</summary>
+    /// <summary>"C" for a country.</summary>
     public string BaseCode { get; set; } = "C";
 
     /// <summary>Up to three characters, mapping to <see cref="Applicant.CountryCode"/>.</summary>

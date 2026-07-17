@@ -44,17 +44,16 @@ public partial class MigraDocReportGenerator
             query = query.Where(a => a.CreatedAt < toExclusive);
         }
 
-        // Ordered as you'd sort a stack of labels.
+        // Ordered as you'd sort a stack of labels. Include the locality so the
+        // city line reads straight off the joined row.
         var people = await query
+            .Include(a => a.Locality)
             .OrderBy(a => a.LastName)
             .ThenBy(a => a.FirstName)
             .ToListAsync(ct);
 
-        // Town and country are stored as codes; a mailing label wants the human
-        // description. Load both lookups once into dictionaries rather than joining
-        // per row.
-        var towns = await db.TownCodes.AsNoTracking()
-            .ToDictionaryAsync(t => t.Code, t => t.Description, ct);
+        // Country of birth is stored as a code; a label wants the human
+        // description. Load the lookup once into a dictionary rather than per row.
         var countries = await db.CountryCodes.AsNoTracking()
             .ToDictionaryAsync(c => c.Code, c => c.Description, ct);
 
@@ -117,9 +116,10 @@ public partial class MigraDocReportGenerator
                 var cell = new XRect(x + PadX, y + PadY, LabelW - 2 * PadX, LabelH - 2 * PadY);
 
                 var a = people[i];
-                var town = towns.GetValueOrDefault(a.TownCode, a.TownCode);
                 var country = countries.GetValueOrDefault(a.CountryCode, a.CountryCode);
-                var cityLine = $"{town} {a.ZipCode}".Trim();
+                // "City, ST 02139" from the joined locality; blank if unresolved.
+                var loc = a.Locality;
+                var cityLine = loc is null ? "" : $"{loc.Name}, {loc.State} {loc.ZipCode}".Trim();
                 var lines = new (string Text, XFont Font)[]
                 {
                     (a.FullName, nameFont),      // computed "First Middle Last"
