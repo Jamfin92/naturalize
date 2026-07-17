@@ -1,5 +1,5 @@
 import { clearToken, getToken } from './token'
-import type { Applicant, AuditEvent, NaturalizationCase, Officer, Paged } from './types'
+import type { Applicant, AuditEvent, Lookup, Officer, Paged } from './types'
 
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5099'
 
@@ -167,17 +167,16 @@ export const api = {
     remove: (id: number) => request<void>(`/api/applicants/${id}`, { method: 'DELETE' }),
     restore: (id: number) =>
       request<Applicant>(`/api/applicants/${id}/restore`, { method: 'POST' }),
-    // The applicant's cases are still readable here (the endpoint stays in
-    // ApplicantEndpoints); their detail screens, and everything that mutates a
-    // case, live on the enhancement branch.
-    cases: (id: number) => request<NaturalizationCase[]>(`/api/applicants/${id}/cases`),
     history: (id: number) => request<AuditEvent[]>(`/api/applicants/${id}/history`),
   },
 
+  lookups: {
+    towns: () => request<Lookup[]>('/api/lookups/towns'),
+    countries: () => request<Lookup[]>('/api/lookups/countries'),
+  },
+
   reports: {
-    caseRecord: (caseId: number) =>
-      download(`/api/reports/case/${caseId}.pdf`, `case-record-${caseId}.pdf`),
-    approvals: (params: { from?: string; to?: string; fieldOffice?: string } = {}) =>
+    approvals: (params: { from?: string; to?: string } = {}) =>
       download(`/api/reports/approvals.pdf${query(params)}`, 'approvals.pdf'),
     pipeline: () => download('/api/reports/pipeline.pdf', 'pipeline.pdf'),
     labels: (params: { from?: string; to?: string } = {}) =>
@@ -185,5 +184,9 @@ export const api = {
   },
 }
 
-// `fullName` is server-composed and read-only, so the client never sends it.
-export type ApplicantInput = Omit<Applicant, 'id' | 'createdAt' | 'fullName'>
+// `fullName` is server-composed and read-only, so the client never sends it;
+// createdAt / updatedAt are server-owned.
+export type ApplicantInput = Omit<
+  Applicant,
+  'id' | 'createdAt' | 'updatedAt' | 'fullName'
+>

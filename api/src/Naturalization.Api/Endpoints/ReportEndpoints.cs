@@ -1,5 +1,4 @@
 using Naturalization.Api.Reports;
-using Naturalization.Api.Services;
 
 namespace Naturalization.Api.Endpoints;
 
@@ -12,7 +11,7 @@ public static class ReportEndpoints
             .RequireAuthorization();
 
         /*
-         * These are now behind auth, which changed how the client fetches them.
+         * These are behind auth, which changed how the client fetches them.
          *
          * They used to be plain <a href> links: the browser navigated to the URL
          * and Content-Disposition did the rest. But a browser NAVIGATION cannot
@@ -21,35 +20,12 @@ public static class ReportEndpoints
          * The SPA now fetches them with the bearer token and saves the blob (see
          * src/lib/api.ts). CORS must expose Content-Disposition for the filename
          * below to survive the trip — see Program.cs.
-         *
-         * The alternative — accepting ?access_token= on these routes — would have
-         * kept the <a href> and leaked a full-lifetime bearer token into browser
-         * history, the Referer header, and every proxy log in between.
          */
-
-        g.MapGet("/case/{caseId:int}.pdf", async Task<IResult> (
-            IReportGenerator reports, int caseId, CancellationToken ct) =>
-        {
-            try
-            {
-                var pdf = await reports.CaseRecordAsync(caseId, ct);
-                return Results.File(pdf, "application/pdf", $"case-record-{caseId}.pdf");
-            }
-            catch (KeyNotFoundException e)
-            {
-                return Results.Problem(e.Message, statusCode: StatusCodes.Status404NotFound);
-            }
-        })
-        .WithName("CaseRecordPdf")
-        .WithSummary("The complete file for one case: particulars, decision, evidence, audit trail.")
-        .Produces(StatusCodes.Status200OK, contentType: "application/pdf")
-        .Produces(StatusCodes.Status404NotFound);
 
         g.MapGet("/approvals.pdf", async Task<IResult> (
             IReportGenerator reports,
             DateOnly? from,
             DateOnly? to,
-            string? fieldOffice,
             CancellationToken ct) =>
         {
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -61,11 +37,11 @@ public static class ReportEndpoints
             if (start > end)
                 return Results.Problem("'from' must not be after 'to'.", statusCode: 400);
 
-            var pdf = await reports.ApprovalsAsync(start, end, fieldOffice, ct);
+            var pdf = await reports.ApprovalsAsync(start, end, ct);
             return Results.File(pdf, "application/pdf", $"approvals-{start:yyyyMMdd}-{end:yyyyMMdd}.pdf");
         })
         .WithName("ApprovalsPdf")
-        .WithSummary("Decisions in a date range, with approve/deny counts by field office.")
+        .WithSummary("Decisions in a date range, with approve/deny counts.")
         .Produces(StatusCodes.Status200OK, contentType: "application/pdf");
 
         g.MapGet("/pipeline.pdf", async (IReportGenerator reports, CancellationToken ct) =>
@@ -104,9 +80,5 @@ public static class ReportEndpoints
         .WithName("MailingLabelsPdf")
         .WithSummary("Avery 5160 mailing labels — one per active applicant, optionally by date added (single date or range).")
         .Produces(StatusCodes.Status200OK, contentType: "application/pdf");
-
-        // The /api/metrics dashboard endpoint moved to the enhancement branch with
-        // the dashboard screen that consumed it. CaseMetrics itself stays — the
-        // pipeline PDF above still depends on it.
     }
 }

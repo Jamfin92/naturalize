@@ -43,56 +43,6 @@ public class ReportTests(ApiFactory factory) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task A_case_record_renders_for_a_seeded_case()
-    {
-        var client = await factory.SignedInAsync();
-
-        /*
-         * This build has no POST /api/cases — the case-write surface lives on the
-         * enhancement branch. But the case DOMAIN and the Case Record PDF stay, so
-         * the fixture is seeded straight through the DbContext. (Seed:Demo is off,
-         * so nothing else is in the database.)
-         */
-        int caseId;
-        using (var scope = factory.Services.CreateScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<NaturalizationDbContext>();
-            var applicant = new Applicant
-            {
-                AlienNumber = "A900800700",
-                FirstName = "Case",
-                LastName = "Owner",
-                DateOfBirth = new DateOnly(1988, 3, 14),
-                LawfulPermanentResidentSince = new DateOnly(2016, 6, 1),
-                CreatedAt = DateTime.UtcNow,
-            };
-            var record = new NaturalizationCase
-            {
-                Applicant = applicant,
-                ReceiptNumber = "NBC2024000999",
-                FiledOn = new DateOnly(2025, 1, 15),
-                FieldOffice = "Boston, MA",
-                Status = CaseStatus.InterviewCompleted,
-            };
-            record.Events.Add(new CaseEvent
-            {
-                EventType = "Application received",
-                OccurredAt = DateTime.UtcNow,
-                Actor = "System",
-                Notes = "Seeded for the report test.",
-            });
-            db.Cases.Add(record);
-            await db.SaveChangesAsync();
-            caseId = record.Id;
-        }
-
-        var pdf = await client.GetAsync($"/api/reports/case/{caseId}.pdf");
-        pdf.EnsureSuccessStatusCode();
-        var bytes = await pdf.Content.ReadAsByteArrayAsync();
-        Assert.Equal("%PDF", Encoding.ASCII.GetString(bytes, 0, 4));
-    }
-
-    [Fact]
     public async Task Mailing_labels_require_a_token()
     {
         var client = factory.CreateClient();
@@ -120,12 +70,12 @@ public class ReportTests(ApiFactory factory) : IClassFixture<ApiFactory>
                     FirstName = "Label",
                     MiddleName = i == 0 ? "Quincy" : null,
                     LastName = $"Recipient{i}",
-                    AddressLine = $"{100 + i} Test St",
-                    City = "Boston",
-                    State = "MA",
-                    PostalCode = "02101",
-                    DateOfBirth = new DateOnly(1988, 3, 14),
-                    LawfulPermanentResidentSince = new DateOnly(2016, 6, 1),
+                    Address1 = $"{100 + i} Test St",
+                    TownCode = "001",
+                    CountryCode = "001",
+                    ZipCode = "02101",
+                    BirthDate = new DateOnly(1988, 3, 14),
+                    AdmissionDate = new DateOnly(2016, 6, 1),
                     CreatedAt = DateTime.UtcNow,
                 });
             }
@@ -159,12 +109,12 @@ public class ReportTests(ApiFactory factory) : IClassFixture<ApiFactory>
                 AlienNumber = "A710000001",
                 FirstName = "Early",
                 LastName = "Arrival",
-                AddressLine = "1 Winter Way",
-                City = "Boston",
-                State = "MA",
-                PostalCode = "02101",
-                DateOfBirth = new DateOnly(1988, 3, 14),
-                LawfulPermanentResidentSince = new DateOnly(2016, 6, 1),
+                Address1 = "1 Winter Way",
+                TownCode = "001",
+                CountryCode = "001",
+                ZipCode = "02101",
+                BirthDate = new DateOnly(1988, 3, 14),
+                AdmissionDate = new DateOnly(2016, 6, 1),
                 CreatedAt = early,
             });
             db.Applicants.Add(new Applicant
@@ -172,12 +122,12 @@ public class ReportTests(ApiFactory factory) : IClassFixture<ApiFactory>
                 AlienNumber = "A710000002",
                 FirstName = "Late",
                 LastName = "Arrival",
-                AddressLine = "2 Spring St",
-                City = "Boston",
-                State = "MA",
-                PostalCode = "02101",
-                DateOfBirth = new DateOnly(1990, 5, 2),
-                LawfulPermanentResidentSince = new DateOnly(2017, 7, 1),
+                Address1 = "2 Spring St",
+                TownCode = "001",
+                CountryCode = "001",
+                ZipCode = "02101",
+                BirthDate = new DateOnly(1990, 5, 2),
+                AdmissionDate = new DateOnly(2017, 7, 1),
                 CreatedAt = late,
             });
             await db.SaveChangesAsync();

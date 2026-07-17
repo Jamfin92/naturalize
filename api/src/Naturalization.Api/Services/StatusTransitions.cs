@@ -3,42 +3,27 @@ using Naturalization.Api.Domain;
 namespace Naturalization.Api.Services;
 
 /// <summary>
-/// The N-400 lifecycle as an explicit state machine.
+/// Small helpers over <see cref="ApplicationStatus"/>.
 ///
-/// This is the only place transitions are defined. The API exposes the legal
-/// next states on every case read, and the UI renders exactly those as buttons
-/// rather than duplicating the rules in TypeScript — so the interface cannot
-/// offer a move the server would reject, and the two cannot drift apart.
+/// The per-case state machine that used to live here went away with the case
+/// table; a single applicant row now carries its own status, set directly. What
+/// remains is the one distinction the pipeline metrics still need — whether a
+/// status counts as open work — plus a human label for the terse enum names.
 /// </summary>
-public static class StatusTransitions
+public static class ApplicationStatuses
 {
-    private static readonly Dictionary<CaseStatus, CaseStatus[]> Allowed = new()
-    {
-        [CaseStatus.Received] = [CaseStatus.BiometricsScheduled, CaseStatus.Withdrawn],
-        [CaseStatus.BiometricsScheduled] = [CaseStatus.BiometricsCompleted, CaseStatus.Withdrawn],
-        [CaseStatus.BiometricsCompleted] = [CaseStatus.InterviewScheduled, CaseStatus.Withdrawn],
-        [CaseStatus.InterviewScheduled] = [CaseStatus.InterviewCompleted, CaseStatus.Withdrawn],
-
-        // The interview is the gate: a case can only be adjudicated once it is held.
-        [CaseStatus.InterviewCompleted] = [CaseStatus.Approved, CaseStatus.Denied, CaseStatus.Withdrawn],
-
-        [CaseStatus.Approved] = [CaseStatus.OathScheduled],
-        [CaseStatus.OathScheduled] = [CaseStatus.Naturalized],
-
-        // Terminal. Naturalization, denial and withdrawal all end the case.
-        [CaseStatus.Naturalized] = [],
-        [CaseStatus.Denied] = [],
-        [CaseStatus.Withdrawn] = []
-    };
-
-    public static IReadOnlyList<CaseStatus> From(CaseStatus status) =>
-        Allowed.TryGetValue(status, out var next) ? next : [];
-
-    public static bool IsAllowed(CaseStatus from, CaseStatus to) => From(from).Contains(to);
-
-    public static bool IsTerminal(CaseStatus status) => From(status).Count == 0;
-
     /// <summary>Statuses that count as still-open work for pipeline metrics.</summary>
-    public static bool IsPending(CaseStatus status) =>
-        status is not (CaseStatus.Naturalized or CaseStatus.Denied or CaseStatus.Withdrawn);
+    public static bool IsPending(ApplicationStatus status) =>
+        status is ApplicationStatus.Received or ApplicationStatus.InReview;
+
+    /// <summary>Terminal states carry no further action.</summary>
+    public static bool IsTerminal(ApplicationStatus status) =>
+        status is ApplicationStatus.Naturalized or ApplicationStatus.Denied or ApplicationStatus.Withdrawn;
+
+    /// <summary>Human label for a status. Mirrors STATUS_LABELS in the frontend's types.ts.</summary>
+    public static string Label(ApplicationStatus status) => status switch
+    {
+        ApplicationStatus.InReview => "In review",
+        _ => status.ToString()
+    };
 }

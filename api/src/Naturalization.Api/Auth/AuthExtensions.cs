@@ -49,7 +49,7 @@ public static class AuthExtensions
 
         // PBKDF2. Registering just the hasher gets us password verification
         // without dragging in the whole of ASP.NET Identity (stores, roles, UI).
-        services.AddSingleton<IPasswordHasher<OfficerAccount>, PasswordHasher<OfficerAccount>>();
+        services.AddSingleton<IPasswordHasher<ApplicationUser>, PasswordHasher<ApplicationUser>>();
         services.AddScoped<TokenIssuer>();
 
         var jwt = config.GetSection(JwtOptions.Section).Get<JwtOptions>() ?? new JwtOptions();

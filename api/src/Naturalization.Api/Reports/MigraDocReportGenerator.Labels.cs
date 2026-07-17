@@ -50,6 +50,14 @@ public partial class MigraDocReportGenerator
             .ThenBy(a => a.FirstName)
             .ToListAsync(ct);
 
+        // Town and country are stored as codes; a mailing label wants the human
+        // description. Load both lookups once into dictionaries rather than joining
+        // per row.
+        var towns = await db.TownCodes.AsNoTracking()
+            .ToDictionaryAsync(t => t.Code, t => t.Description, ct);
+        var countries = await db.CountryCodes.AsNoTracking()
+            .ToDictionaryAsync(c => c.Code, c => c.Description, ct);
+
         // Avery 5160 on US Letter, everything in points (72pt = 1in). Arithmetic
         // closes exactly: 0.1875 + 3×2.625 + 2×0.125 + 0.1875 = 8.5in across;
         // 0.5 + 10×1.0 + 0.5 = 11in down.
@@ -109,12 +117,15 @@ public partial class MigraDocReportGenerator
                 var cell = new XRect(x + PadX, y + PadY, LabelW - 2 * PadX, LabelH - 2 * PadY);
 
                 var a = people[i];
-                var cityLine = $"{a.City}, {a.State} {a.PostalCode}".Trim(',', ' ');
+                var town = towns.GetValueOrDefault(a.TownCode, a.TownCode);
+                var country = countries.GetValueOrDefault(a.CountryCode, a.CountryCode);
+                var cityLine = $"{town} {a.ZipCode}".Trim();
                 var lines = new (string Text, XFont Font)[]
                 {
                     (a.FullName, nameFont),      // computed "First Middle Last"
-                    (a.AddressLine, addrFont),
+                    (a.Address1, addrFont),
                     (cityLine, addrFont),
+                    (country, addrFont),
                 };
 
                 // Clip to the sticker so an overlong street or name can't bleed into
