@@ -15,6 +15,14 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <!--
+      SQL Server is the production database and owns the versioned migrations under
+      Data/Migrations. SQLite is kept alongside it for the zero-infrastructure
+      paths — the xUnit integration suite, the Playwright e2e host, and a
+      SQLite-only local run (Database:Provider=Sqlite). The active provider is
+      chosen in Program.cs; see also SETUP-SQLSERVER.md.
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.11" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.11" />
     <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="8.0.11" />
 

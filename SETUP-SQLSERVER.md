@@ -1,7 +1,8 @@
 # Going live on SQL Server
 
-How to replace the built-in SQLite demo database — 40 **fabricated** applicants and demo officer
-accounts with public passwords — with a real Microsoft SQL Server database holding your own records.
+How to point the app — which already targets SQL Server — at a real Microsoft SQL Server database
+holding your own records, replacing the seeded demo register of 40 **fabricated** applicants and demo
+officer accounts with public passwords.
 
 This is the operational companion to the README's [**Before you deploy
 this**](README.md#before-you-deploy-this) section: that section says *what* a real deployment needs; this
@@ -59,59 +60,43 @@ Notes:
 
 ---
 
-## 3. Switch the EF Core provider
+## 3. The provider is already SQL Server
 
-The app is wired for SQLite in two places. Change both.
+**Nothing to switch — the app targets SQL Server out of the box.** The runtime
+([`Program.cs`](api/src/Naturalization.Api/Program.cs)) and the design-time factory
+([`DesignTimeDbContextFactory.cs`](api/src/Naturalization.Api/Data/DesignTimeDbContextFactory.cs)) both
+use `UseSqlServer`, the migrations under `Data/Migrations` are SQL Server-shaped, and `MigrateAsync()`
+applies them on startup. Your only job is to point it at *your* instance (§4).
 
-**a. Swap the NuGet package** in `api/src/Naturalization.Api/Naturalization.Api.csproj` — replace
-
-```xml
-<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.11" />
-```
-
-with the SQL Server provider (keep it on the EF Core 8 line):
-
-```xml
-<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.11" />
-```
-
-Leave `Microsoft.EntityFrameworkCore.Design` in place — it's provider-agnostic and the `dotnet ef`
-tooling needs it.
-
-**b. Point the runtime at SQL Server** in
-[`api/src/Naturalization.Api/Program.cs`](api/src/Naturalization.Api/Program.cs) — change the provider
-call (the connection string already comes from configuration, see §4):
+How the provider is chosen: the API references both `Microsoft.EntityFrameworkCore.SqlServer` (the
+production provider) and `Microsoft.EntityFrameworkCore.Sqlite`, and `Program.cs` reads the
+configuration key `Database:Provider` (default `SqlServer`) to decide which to use:
 
 ```csharp
-builder.Services.AddDbContext<NaturalizationDbContext>(o => o
-    .UseSqlServer(connection)       // was .UseSqlite(connection)
-    .ConfigureWarnings(w => w.Ignore(
-        CoreEventId.PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning)));
+var provider = builder.Configuration["Database:Provider"] ?? "SqlServer";
+var useSqlite = provider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase);
+// ... UseSqlite(connection) when useSqlite, else UseSqlServer(connection)
 ```
 
-Keep the `ConfigureWarnings(...)` suppression exactly as-is — it documents a deliberate modelling
-choice, not a provider quirk.
+- **Production / this guide** — leave `Database:Provider` unset (or `SqlServer`). SQL Server, real
+  migrations.
+- **Zero-setup local run** — set `Database__Provider=Sqlite` to run off a single SQLite file with no
+  server. That path builds its schema from the model (`EnsureCreated`) and therefore does **not**
+  exercise the migrations; it exists for a fast `dotnet run` and for the test suites.
 
-**c. Point the design-time factory at SQL Server** in
-[`api/src/Naturalization.Api/Data/DesignTimeDbContextFactory.cs`](api/src/Naturalization.Api/Data/DesignTimeDbContextFactory.cs).
-This is what `dotnet ef` uses to build the model; if it still says SQLite, your migrations scaffold for
-the wrong provider:
+The integration tests and the Playwright e2e host use the SQLite path deliberately, so the suites stay
+fast and need no database server — see §8.
 
-```csharp
-var options = new DbContextOptionsBuilder<NaturalizationDbContext>()
-    .UseSqlServer("Server=localhost,1433;Database=naturalize;User Id=sa;Password=Change-me-123;TrustServerCertificate=True")
-    .Options;
-```
-
-The design-time connection only needs to reach *a* SQL Server instance so EF can read provider metadata;
-it never touches production data.
+`Microsoft.EntityFrameworkCore.Design` stays referenced either way; it is provider-agnostic and the
+`dotnet ef` tooling needs it.
 
 ---
 
 ## 4. Connection string & environment variables
 
 The runtime reads its connection string from configuration key `ConnectionStrings:Default`
-(env `ConnectionStrings__Default`), falling back to the SQLite file only if it is unset — see
+(env `ConnectionStrings__Default`). Unset, it falls back to a local SQL Server instance (the docker
+one in §1) — or, on the `Database:Provider=Sqlite` path, to a local SQLite file. See
 [`Program.cs`](api/src/Naturalization.Api/Program.cs). Set these on the API host:
 
 | Variable | Required | Purpose |
@@ -150,41 +135,39 @@ VITE_API_URL="https://api.your-office.example" npm run build
 
 ---
 
-## 5. Regenerate the migrations for SQL Server
+## 5. Apply the migrations
 
-The migrations under `api/src/Naturalization.Api/Data/Migrations/` were generated for SQLite (SQLite
-column types and table-rebuild semantics) and **will not apply to SQL Server**. Because you are going
-live from an empty database with no rows to preserve, the clean move is to regenerate a single fresh
-`InitialCreate` for the new provider:
+The migrations under `api/src/Naturalization.Api/Data/Migrations/` are already SQL Server-shaped
+(`InitialCreate` — SQL Server column types, in-place `ALTER` semantics), so there is nothing to
+regenerate. You just need to apply them to your instance. Either:
 
-```bash
-# from the repo root
-dotnet tool restore                                   # restores the pinned dotnet-ef 8.0.11
-
-rm api/src/Naturalization.Api/Data/Migrations/*.cs    # drop the SQLite-shaped migrations
-
-dotnet ef migrations add InitialCreate \
-  -p api/src/Naturalization.Api -s api/src/Naturalization.Api
-```
-
-Then apply the schema. Either:
-
-- **let the app do it** — on boot, `Program.cs` calls `await db.Database.MigrateAsync()`, which applies
-  any pending migrations; or
-- **apply it yourself** before first boot:
+- **let the app do it** — on boot, `Program.cs` calls `await db.Database.MigrateAsync()` (on the SQL
+  Server path), which applies any pending migrations; or
+- **apply them yourself** before first boot:
 
   ```bash
+  # from the repo root
+  dotnet tool restore                                   # restores the pinned dotnet-ef 8.0.11
   dotnet ef database update -p api/src/Naturalization.Api -s api/src/Naturalization.Api
   ```
 
-Review the generated migration before applying it to anything you care about. (The README's
-[Known limitations](README.md#known-limitations) note about SQLite rebuilding a table to alter a column
-no longer applies once you're on SQL Server — it does in-place `ALTER TABLE`.)
+  `dotnet ef` reads the connection from `ConnectionStrings__Default` (falling back to the design-time
+  factory's local default), so export yours first if it is not the local docker instance.
+
+Review the migration before applying it to anything you care about — anything not in the EF model
+(hand-added triggers, indexes) is not captured by it.
 
 Confirm it applied:
 
 ```sql
 SELECT [MigrationId] FROM [__EFMigrationsHistory];   -- should list InitialCreate
+```
+
+**Adding a schema change later.** Because the app is already on SQL Server, a new migration scaffolds
+directly for it — no provider juggling:
+
+```bash
+dotnet ef migrations add <ChangeName> -p api/src/Naturalization.Api -s api/src/Naturalization.Api -o Data/Migrations
 ```
 
 ---
@@ -245,9 +228,9 @@ To only *reorder or hide* columns that already exist, step 7 alone is enough —
 ## 8. Verify
 
 ```bash
-dotnet build api/Naturalization.sln            # provider swap compiles
+dotnet build api/Naturalization.sln            # compiles
 dotnet ef database update -p api/src/Naturalization.Api -s api/src/Naturalization.Api
-dotnet test api/Naturalization.sln             # integration suite still green
+dotnet test api/Naturalization.sln             # integration suite still green (runs on the SQLite path)
 ```
 
 Then, against the running system: sign in with a **real** officer account, confirm the applicant grid
