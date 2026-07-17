@@ -43,25 +43,25 @@ public class ApplicantTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var updated = await client.PutAsJsonAsync($"/api/applicants/{applicant!.Id}", new
         {
             alienNumber = "A200300400",
+            naturalizationNumber = "",
+            petitionNumber = "NBC2024000001",
             firstName = "Editable",
             lastName = "Person",
-            dateOfBirth = "1988-03-14",
-            countryOfBirth = "Kenya",
-            nationality = "Kenyan",
-            addressLine = "1 Test St",
-            city = "Cambridge", // changed
-            state = "MA",
-            postalCode = "02101",
+            birthDate = "1988-03-14",
+            admissionDate = "2016-06-01",
+            address1 = "1 Test St",
+            townCode = "002", // changed from the sample's "001"
+            countryCode = "001",
+            zipCode = "02101",
             email = "test@example.com",
-            phone = "(555) 555-5555",
-            lawfulPermanentResidentSince = "2016-06-01",
+            status = "Received",
         });
         updated.EnsureSuccessStatusCode();
 
         var history = await client.GetFromJsonAsync<List<TestClient.AuditEventResponse>>(
             $"/api/applicants/{applicant.Id}/history");
 
-        Assert.Contains(history!, e => e.Action == "Updated" && e.Summary.Contains("city"));
+        Assert.Contains(history!, e => e.Action == "Updated" && e.Summary.Contains("town"));
     }
 
     [Fact]

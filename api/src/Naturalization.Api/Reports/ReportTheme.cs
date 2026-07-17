@@ -231,17 +231,12 @@ internal static class ReportTheme
     };
 
     /// <summary>
-    /// Enum names are terse and CamelCased; nobody wants to read
-    /// "BiometricsScheduled" on a printed report. Mirrors STATUS_LABELS in the
+    /// Enum names are terse and CamelCased. Mirrors STATUS_LABELS in the
     /// frontend's types.ts.
     /// </summary>
     internal static string StatusLabel(string status) => status switch
     {
-        "BiometricsScheduled" => "Biometrics scheduled",
-        "BiometricsCompleted" => "Biometrics completed",
-        "InterviewScheduled" => "Interview scheduled",
-        "InterviewCompleted" => "Interview completed",
-        "OathScheduled" => "Oath scheduled",
+        "InReview" => "In review",
         _ => status
     };
 

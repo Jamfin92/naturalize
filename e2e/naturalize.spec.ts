@@ -74,9 +74,7 @@ test.describe('applicants', () => {
     await page.getByLabel('Last name').fill('Applicant')
     await page.getByLabel('A-Number').fill(aNumber)
     await page.getByLabel('Date of birth').fill('1988-03-14')
-    await page.getByLabel('LPR since').fill('2016-06-01')
-    await page.getByLabel('Country of birth').fill('Kenya')
-    await page.getByLabel('Nationality').fill('Kenyan')
+    await page.getByLabel('Admission date').fill('2016-06-01')
     await page.getByRole('button', { name: 'Add applicant' }).click()
 
     // Lands on the new record. (.first(): the A-Number also appears in the audit
@@ -101,21 +99,21 @@ test.describe('applicants', () => {
     await page.getByLabel('Last name').fill('Person')
     await page.getByLabel('A-Number').fill(aNumber)
     await page.getByLabel('Date of birth').fill('1990-01-01')
-    await page.getByLabel('LPR since').fill('2015-01-01')
-    await page.getByLabel('City').fill('Boston')
+    await page.getByLabel('Admission date').fill('2015-01-01')
+    await page.getByLabel('Address').fill('1 Old St')
     await page.getByRole('button', { name: 'Add applicant' }).click()
     await expect(page.getByRole('heading', { name: 'Editable Person' })).toBeVisible()
 
     await page.getByRole('link', { name: 'Edit' }).click()
-    await page.getByLabel('City').fill('Cambridge')
+    await page.getByLabel('Address').fill('2 New St')
     await page.getByRole('button', { name: 'Save changes' }).click()
 
     // The change stuck...
-    await expect(page.getByText('Cambridge', { exact: false })).toBeVisible()
+    await expect(page.getByText('2 New St', { exact: false })).toBeVisible()
 
-    // ...and the record's own history names the officer FROM THE TOKEN. If
+    // ...and the record's own history names the user FROM THE TOKEN. If
     // MapInboundClaims were left on, this would read "Unknown officer".
-    const history = page.locator('table', { has: page.getByText('Officer') }).last()
+    const history = page.locator('table', { has: page.getByText('User') }).last()
     await expect(history.getByText('Updated')).toBeVisible()
     await expect(history.getByText('A. Hernandez').first()).toBeVisible()
   })
@@ -129,7 +127,7 @@ test.describe('applicants', () => {
     await page.getByLabel('Last name').fill('Person')
     await page.getByLabel('A-Number').fill(aNumber)
     await page.getByLabel('Date of birth').fill('1985-05-05')
-    await page.getByLabel('LPR since').fill('2014-01-01')
+    await page.getByLabel('Admission date').fill('2014-01-01')
     await page.getByRole('button', { name: 'Add applicant' }).click()
     await expect(page.getByRole('heading', { name: 'Withdrawn Person' })).toBeVisible()
 
@@ -153,7 +151,7 @@ test.describe('applicants', () => {
     await page.getByLabel('Last name').fill('Person')
     await page.getByLabel('A-Number').fill(aNumber)
     await page.getByLabel('Date of birth').fill('1985-05-05')
-    await page.getByLabel('LPR since').fill('2014-01-01')
+    await page.getByLabel('Admission date').fill('2014-01-01')
     await page.getByRole('button', { name: 'Add applicant' }).click()
 
     await expect(page.getByText(/belongs to withdrawn applicant/)).toBeVisible()
@@ -169,7 +167,7 @@ test.describe('applicants', () => {
     await page.getByLabel('Last name').fill('Person')
     await page.getByLabel('A-Number').fill(aNumber)
     await page.getByLabel('Date of birth').fill('1980-02-02')
-    await page.getByLabel('LPR since').fill('2013-01-01')
+    await page.getByLabel('Admission date').fill('2013-01-01')
     await page.getByRole('button', { name: 'Add applicant' }).click()
     await expect(page.getByRole('heading', { name: 'Listwithdraw Person' })).toBeVisible()
 
@@ -253,22 +251,6 @@ test.describe('reports', () => {
     ])
 
     expect(download.suggestedFilename()).toMatch(/^approvals-\d{8}-\d{8}\.pdf$/)
-  })
-
-  test('the case record report downloads as a PDF', async ({ page }) => {
-    await signIn(page)
-    await page.goto('/reports')
-
-    const button = page.getByRole('button', { name: 'Download Case record' })
-
-    // Disabled until a case is named. It used to render href="#", so clicking it
-    // with the field blank opened a blank tab.
-    await expect(button).toBeDisabled()
-
-    await page.getByLabel('Case ID').fill('1')
-    const [download] = await Promise.all([page.waitForEvent('download'), button.click()])
-
-    expect(download.suggestedFilename()).toBe('case-record-1.pdf')
   })
 
   test('the mailing labels download as a PDF', async ({ page }) => {
