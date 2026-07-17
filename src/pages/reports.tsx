@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Download, FileBarChart, FileSpreadsheet, FileText, Tags } from 'lucide-react'
+import { Download, FileBarChart, FileSpreadsheet, Tags } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { PageHeader } from '@/components/page'
@@ -98,8 +98,6 @@ export function ReportsPage() {
 
   const [from, setFrom] = useState(iso(firstOfYear))
   const [to, setTo] = useState(iso(today))
-  const [office, setOffice] = useState('')
-  const [caseId, setCaseId] = useState('')
 
   // Mailing labels can be filtered by the date an applicant was added: every
   // active applicant (default), a single day, or a date range.
@@ -125,8 +123,8 @@ export function ReportsPage() {
         <ReportCard
           icon={FileBarChart}
           title="Approvals report"
-          description="Every decision in a date range, with approve/deny counts broken out by field office."
-          onDownload={() => api.reports.approvals({ from, to, fieldOffice: office || undefined })}
+          description="Every decision in a date range, with approve and deny counts."
+          onDownload={() => api.reports.approvals({ from, to })}
         >
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -146,53 +144,15 @@ export function ReportsPage() {
               </Label>
               <Input id="to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
             </div>
-            <div className="col-span-2 space-y-1.5">
-              <Label htmlFor="office" className="text-xs">
-                Field office <span className="text-muted-foreground">(all if blank)</span>
-              </Label>
-              <Input
-                id="office"
-                value={office}
-                onChange={(e) => setOffice(e.target.value)}
-                placeholder="e.g. Boston, MA"
-              />
-            </div>
           </div>
         </ReportCard>
 
         <ReportCard
           icon={FileSpreadsheet}
           title="Pipeline report"
-          description="Current caseload by status, with case aging and the oldest pending matters flagged."
+          description="Current caseload by status, with record aging and the oldest pending matters flagged."
           onDownload={() => api.reports.pipeline()}
         />
-
-        <ReportCard
-          icon={FileText}
-          title="Case record"
-          description="The complete file for a single case: applicant particulars, timeline, evidence, and decision."
-          onDownload={() => api.reports.caseRecord(Number(caseId))}
-          // Previously this rendered href="#" when blank, so clicking it opened a
-          // blank tab. Disable it instead of pretending it's a link.
-          disabled={!caseId}
-        >
-          <div className="space-y-1.5">
-            <Label htmlFor="caseId" className="text-xs">
-              Case ID
-            </Label>
-            <Input
-              id="caseId"
-              type="number"
-              min={1}
-              value={caseId}
-              onChange={(e) => setCaseId(e.target.value)}
-              placeholder="e.g. 1"
-            />
-            <p className="text-muted-foreground text-xs">
-              Case IDs are listed on each applicant's record.
-            </p>
-          </div>
-        </ReportCard>
 
         <ReportCard
           icon={Tags}

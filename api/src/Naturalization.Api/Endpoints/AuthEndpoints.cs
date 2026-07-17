@@ -17,12 +17,12 @@ public static class AuthEndpoints
 
         g.MapPost("/login", async Task<Results<Ok<LoginResult>, UnauthorizedHttpResult>> (
             NaturalizationDbContext db,
-            IPasswordHasher<OfficerAccount> hasher,
+            IPasswordHasher<ApplicationUser> hasher,
             TokenIssuer tokens,
             LoginInput input) =>
         {
             var email = (input.Email ?? "").Trim();
-            var officer = await db.Officers.FirstOrDefaultAsync(o => o.Email == email);
+            var officer = await db.Users.FirstOrDefaultAsync(o => o.Email == email);
 
             /*
              * One 401 for every failure — unknown account, wrong password,
@@ -34,7 +34,7 @@ public static class AuthEndpoints
              * faster than a "wrong password" one.
              */
             var hash = officer?.PasswordHash ?? DummyHash;
-            var result = hasher.VerifyHashedPassword(officer ?? new OfficerAccount(), hash, input.Password ?? "");
+            var result = hasher.VerifyHashedPassword(officer ?? new ApplicationUser(), hash, input.Password ?? "");
 
             // SuccessRehashNeeded is a SUCCESS (the hash just used older
             // parameters). Comparing `== Success` alone locks people out on the
@@ -62,7 +62,7 @@ public static class AuthEndpoints
             var id = user.OfficerId();
             if (id is null) return TypedResults.Unauthorized();
 
-            var officer = await db.Officers.AsNoTracking().FirstOrDefaultAsync(o => o.Id == id);
+            var officer = await db.Users.AsNoTracking().FirstOrDefaultAsync(o => o.Id == id);
             if (officer is null || !officer.IsActive) return TypedResults.Unauthorized();
 
             return TypedResults.Ok(OfficerDto.From(officer));
@@ -76,6 +76,6 @@ public static class AuthEndpoints
     /// A real PBKDF2 hash of a value nobody knows, used to keep the timing of a
     /// failed login roughly constant whether or not the account exists.
     /// </summary>
-    private static readonly string DummyHash = new PasswordHasher<OfficerAccount>()
-        .HashPassword(new OfficerAccount(), Guid.NewGuid().ToString());
+    private static readonly string DummyHash = new PasswordHasher<ApplicationUser>()
+        .HashPassword(new ApplicationUser(), Guid.NewGuid().ToString());
 }

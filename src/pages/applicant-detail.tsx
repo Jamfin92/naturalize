@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, FileDown, Pencil, Trash2 } from 'lucide-react'
+import { ArrowLeft, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { EmptyState, ErrorState, LoadingRows, PageHeader } from '@/components/page'
@@ -28,11 +28,11 @@ import { useAuth } from '@/lib/auth'
 import { canManageApplicants, canWithdrawApplicants } from '@/lib/types'
 import { useAsync } from '@/lib/use-async'
 
-function Field({ label, value }: { label: string; value: string }) {
+function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="space-y-0.5">
       <dt className="text-muted-foreground text-xs tracking-wide uppercase">{label}</dt>
-      <dd className="text-foreground text-sm">{value}</dd>
+      <dd className="text-foreground text-sm">{value || '—'}</dd>
     </div>
   )
 }
@@ -47,13 +47,17 @@ export function ApplicantDetailPage() {
   const [withdrawing, setWithdrawing] = useState(false)
 
   const applicant = useAsync(() => api.applicants.get(applicantId), [applicantId])
-  const cases = useAsync(() => api.applicants.cases(applicantId), [applicantId])
   const history = useAsync(() => api.applicants.history(applicantId), [applicantId])
+  const towns = useAsync(() => api.lookups.towns(), [])
+  const countries = useAsync(() => api.lookups.countries(), [])
 
   if (applicant.error) return <ErrorState message={applicant.error} />
   if (applicant.loading || !applicant.data) return <LoadingRows rows={5} />
 
   const a = applicant.data
+  const townName = towns.data?.find((t) => t.code === a.townCode)?.description ?? a.townCode
+  const countryName =
+    countries.data?.find((c) => c.code === a.countryCode)?.description ?? a.countryCode
 
   const withdraw = async () => {
     setWithdrawing(true)
@@ -64,14 +68,6 @@ export function ApplicantDetailPage() {
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Could not withdraw the record.')
       setWithdrawing(false)
-    }
-  }
-
-  const downloadCase = async (caseId: number) => {
-    try {
-      await api.reports.caseRecord(caseId)
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Could not generate the case record.')
     }
   }
 
@@ -106,80 +102,45 @@ export function ApplicantDetailPage() {
         }
       />
 
-      <div className="grid gap-6 @4xl:grid-cols-[1fr_1.4fr]">
+      <div className="grid gap-6 @4xl:grid-cols-2">
         <Card>
           <CardContent className="p-5">
-            <h2 className="font-heading text-foreground mb-4 text-base font-bold">
-              Personal particulars
-            </h2>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="font-heading text-foreground text-base font-bold">
+                Personal particulars
+              </h2>
+              <StatusBadge status={a.status} />
+            </div>
             <dl className="grid grid-cols-2 gap-4">
-              <Field label="Date of birth" value={new Date(a.dateOfBirth).toLocaleDateString()} />
-              <Field label="Country of birth" value={a.countryOfBirth} />
-              <Field label="Nationality" value={a.nationality} />
-              <Field
-                label="LPR since"
-                value={new Date(a.lawfulPermanentResidentSince).toLocaleDateString()}
-              />
+              <Field label="Date of birth" value={new Date(a.birthDate).toLocaleDateString()} />
+              <Field label="Admission date" value={new Date(a.admissionDate).toLocaleDateString()} />
+              <Field label="Country" value={countryName} />
+              <Field label="Town" value={townName} />
               <div className="col-span-2">
-                <Field
-                  label="Residence"
-                  value={`${a.addressLine}, ${a.city}, ${a.state} ${a.postalCode}`}
-                />
+                <Field label="Residence" value={`${a.address1}, ${townName} ${a.zipCode}`} />
               </div>
               <Field label="Email" value={a.email} />
-              <Field label="Phone" value={a.phone} />
             </dl>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="p-5">
-            <h2 className="font-heading text-foreground mb-4 text-base font-bold">Case history</h2>
-
-            {cases.error && <ErrorState message={cases.error} />}
-            {cases.loading && <LoadingRows rows={2} />}
-            {cases.data?.length === 0 && (
-              <EmptyState message="No naturalization case has been filed for this applicant." />
-            )}
-
-            {cases.data && cases.data.length > 0 && (
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead>Receipt</TableHead>
-                    <TableHead>Filed</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Record</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {cases.data.map((c) => (
-                    <TableRow key={c.id}>
-                      <TableCell className="text-foreground font-mono text-xs font-medium">
-                        {c.receiptNumber}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {new Date(c.filedOn).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={c.status} />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => downloadCase(c.id)}
-                          aria-label={`Download case record for ${c.receiptNumber}`}
-                        >
-                          <FileDown className="size-4" />
-                          PDF
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
+            <h2 className="font-heading text-foreground mb-4 text-base font-bold">
+              Application &amp; decision
+            </h2>
+            <dl className="grid grid-cols-2 gap-4">
+              <Field label="Petition number" value={a.petitionNumber} />
+              <Field label="Naturalization number" value={a.naturalizationNumber} />
+              <Field
+                label="Decision date"
+                value={a.decisionDate ? new Date(a.decisionDate).toLocaleDateString() : ''}
+              />
+              <div />
+              <div className="col-span-2">
+                <Field label="Decision notes" value={a.decisionNotes} />
+              </div>
+            </dl>
           </CardContent>
         </Card>
       </div>
@@ -193,7 +154,7 @@ export function ApplicantDetailPage() {
         <CardContent className="p-5">
           <h2 className="font-heading text-foreground mb-1 text-base font-bold">Record history</h2>
           <p className="text-muted-foreground mb-4 text-sm">
-            Every change to this record, and the officer who made it. Append-only — withdrawing a
+            Every change to this record, and the user who made it. Append-only — withdrawing a
             record adds to this trail rather than erasing it.
           </p>
 
@@ -209,7 +170,7 @@ export function ApplicantDetailPage() {
                 <TableRow className="hover:bg-transparent">
                   <TableHead>When</TableHead>
                   <TableHead>Action</TableHead>
-                  <TableHead>Officer</TableHead>
+                  <TableHead>User</TableHead>
                   <TableHead>Detail</TableHead>
                 </TableRow>
               </TableHeader>
@@ -238,9 +199,8 @@ export function ApplicantDetailPage() {
               <div className="space-y-2 text-sm">
                 <p>
                   The record will no longer appear in the register or in reports. It is{' '}
-                  <strong>not destroyed</strong>: the applicant, their cases, their evidence and
-                  their full audit trail all remain on file, and the withdrawal itself is recorded
-                  against your name.
+                  <strong>not destroyed</strong>: the applicant record and its full audit trail
+                  remain on file, and the withdrawal itself is recorded against your name.
                 </p>
                 <p>An administrator can restore the record afterwards.</p>
               </div>

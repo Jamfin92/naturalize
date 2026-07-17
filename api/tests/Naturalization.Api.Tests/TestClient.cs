@@ -6,9 +6,9 @@ namespace Naturalization.Api.Tests;
 /// <summary>Helpers for talking to the API the way the SPA does.</summary>
 public static class TestClient
 {
-    // The demo officers seeded by DbInitializer.SeedOfficersAsync — always
-    // present, because officer seeding is infrastructure and runs even with
-    // Seed:Demo off. One per role, so the authorization tests can sign in as each.
+    // The demo accounts seeded by DbInitializer.SeedUsersAsync — always present,
+    // because account seeding is infrastructure and runs even with Seed:Demo off.
+    // One per role, so the authorization tests can sign in as each.
     public const string OfficerEmail = "a.hernandez@example.gov";   // Admin
     public const string OfficerName = "A. Hernandez";
     public const string OfficerPassword = "Naturalize!Demo1";
@@ -47,23 +47,24 @@ public static class TestClient
     public static object SampleApplicant(string alienNumber, string name = "Test Applicant")
     {
         // Callers pass a two-token display name; split it into the parts the API now
-        // takes. Middle name is omitted (it's optional server-side).
+        // takes. Middle name is omitted (it's optional server-side). Town and country
+        // are codes; the values need not exist in the lookup tables (there is no FK).
         var parts = name.Split(' ', 2);
         return new
         {
             alienNumber,
+            naturalizationNumber = "",
+            petitionNumber = "NBC2024000001",
             firstName = parts[0],
             lastName = parts.Length > 1 ? parts[1] : "Applicant",
-            dateOfBirth = "1988-03-14",
-            countryOfBirth = "Kenya",
-            nationality = "Kenyan",
-            addressLine = "1 Test St",
-            city = "Boston",
-            state = "MA",
-            postalCode = "02101",
+            birthDate = "1988-03-14",
+            admissionDate = "2016-06-01",
+            address1 = "1 Test St",
+            townCode = "001",
+            countryCode = "001",
+            zipCode = "02101",
             email = "test@example.com",
-            phone = "(555) 555-5555",
-            lawfulPermanentResidentSince = "2016-06-01",
+            status = "Received",
         };
     }
 

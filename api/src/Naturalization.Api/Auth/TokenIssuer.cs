@@ -10,7 +10,7 @@ public class TokenIssuer(IOptions<JwtOptions> options)
 {
     private readonly JwtOptions _jwt = options.Value;
 
-    public (string Token, DateTime ExpiresAt) Issue(OfficerAccount officer)
+    public (string Token, DateTime ExpiresAt) Issue(ApplicationUser officer)
     {
         var expires = DateTime.UtcNow.AddMinutes(_jwt.LifetimeMinutes);
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwt.Key));

@@ -12,11 +12,8 @@ namespace Naturalization.Api.Reports;
 /// </summary>
 public interface IReportGenerator
 {
-    /// <summary>The complete file for one case: particulars, timeline, evidence, decision.</summary>
-    Task<byte[]> CaseRecordAsync(int caseId, CancellationToken ct = default);
-
-    /// <summary>Decisions in a date range, with approve/deny counts by field office.</summary>
-    Task<byte[]> ApprovalsAsync(DateOnly from, DateOnly to, string? fieldOffice, CancellationToken ct = default);
+    /// <summary>Decisions in a date range, with approve/deny counts.</summary>
+    Task<byte[]> ApprovalsAsync(DateOnly from, DateOnly to, CancellationToken ct = default);
 
     /// <summary>Current caseload by status, with aging and the oldest pending matters.</summary>
     Task<byte[]> PipelineAsync(CancellationToken ct = default);

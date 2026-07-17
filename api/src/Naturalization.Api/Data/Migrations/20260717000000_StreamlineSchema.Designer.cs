@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Naturalization.Api.Data;
 
@@ -10,9 +11,11 @@ using Naturalization.Api.Data;
 namespace Naturalization.Api.Data.Migrations
 {
     [DbContext(typeof(NaturalizationDbContext))]
-    partial class NaturalizationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260717000000_StreamlineSchema")]
+    partial class StreamlineSchema
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.11");
