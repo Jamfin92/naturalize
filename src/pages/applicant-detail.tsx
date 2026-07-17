@@ -48,14 +48,14 @@ export function ApplicantDetailPage() {
 
   const applicant = useAsync(() => api.applicants.get(applicantId), [applicantId])
   const history = useAsync(() => api.applicants.history(applicantId), [applicantId])
-  const towns = useAsync(() => api.lookups.towns(), [])
   const countries = useAsync(() => api.lookups.countries(), [])
 
   if (applicant.error) return <ErrorState message={applicant.error} />
   if (applicant.loading || !applicant.data) return <LoadingRows rows={5} />
 
   const a = applicant.data
-  const townName = towns.data?.find((t) => t.code === a.townCode)?.description ?? a.townCode
+  // Residence (city/state/zip) comes denormalised on the applicant; only country
+  // of birth still needs the code→name lookup.
   const countryName =
     countries.data?.find((c) => c.code === a.countryCode)?.description ?? a.countryCode
 
@@ -114,10 +114,13 @@ export function ApplicantDetailPage() {
             <dl className="grid grid-cols-2 gap-4">
               <Field label="Date of birth" value={new Date(a.birthDate).toLocaleDateString()} />
               <Field label="Admission date" value={new Date(a.admissionDate).toLocaleDateString()} />
-              <Field label="Country" value={countryName} />
-              <Field label="Town" value={townName} />
+              <Field label="Country of birth" value={countryName} />
+              <Field label="City" value={a.city ? `${a.city}, ${a.state}` : ''} />
               <div className="col-span-2">
-                <Field label="Residence" value={`${a.address1}, ${townName} ${a.zipCode}`} />
+                <Field
+                  label="Residence"
+                  value={a.city ? `${a.address1}, ${a.city}, ${a.state} ${a.zipCode}` : a.address1}
+                />
               </div>
               <Field label="Email" value={a.email} />
             </dl>

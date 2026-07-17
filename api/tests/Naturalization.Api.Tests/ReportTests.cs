@@ -62,6 +62,9 @@ public class ReportTests(ApiFactory factory) : IClassFixture<ApiFactory>
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<NaturalizationDbContext>();
+            var loc = new Locality { ZipCode = "02101", Name = "Boston", State = "MA" };
+            db.Localities.Add(loc);
+            await db.SaveChangesAsync();
             for (var i = 0; i < 3; i++)
             {
                 db.Applicants.Add(new Applicant
@@ -71,9 +74,8 @@ public class ReportTests(ApiFactory factory) : IClassFixture<ApiFactory>
                     MiddleName = i == 0 ? "Quincy" : null,
                     LastName = $"Recipient{i}",
                     Address1 = $"{100 + i} Test St",
-                    TownCode = "001",
+                    LocalityId = loc.Id,
                     CountryCode = "001",
-                    ZipCode = "02101",
                     BirthDate = new DateOnly(1988, 3, 14),
                     AdmissionDate = new DateOnly(2016, 6, 1),
                     CreatedAt = DateTime.UtcNow,
@@ -104,15 +106,17 @@ public class ReportTests(ApiFactory factory) : IClassFixture<ApiFactory>
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<NaturalizationDbContext>();
+            var loc = new Locality { ZipCode = "02101", Name = "Boston", State = "MA" };
+            db.Localities.Add(loc);
+            await db.SaveChangesAsync();
             db.Applicants.Add(new Applicant
             {
                 AlienNumber = "A710000001",
                 FirstName = "Early",
                 LastName = "Arrival",
                 Address1 = "1 Winter Way",
-                TownCode = "001",
+                LocalityId = loc.Id,
                 CountryCode = "001",
-                ZipCode = "02101",
                 BirthDate = new DateOnly(1988, 3, 14),
                 AdmissionDate = new DateOnly(2016, 6, 1),
                 CreatedAt = early,
@@ -123,9 +127,8 @@ public class ReportTests(ApiFactory factory) : IClassFixture<ApiFactory>
                 FirstName = "Late",
                 LastName = "Arrival",
                 Address1 = "2 Spring St",
-                TownCode = "001",
+                LocalityId = loc.Id,
                 CountryCode = "001",
-                ZipCode = "02101",
                 BirthDate = new DateOnly(1990, 5, 2),
                 AdmissionDate = new DateOnly(2017, 7, 1),
                 CreatedAt = late,

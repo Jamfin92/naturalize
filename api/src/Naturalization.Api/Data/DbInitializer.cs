@@ -67,11 +67,19 @@ public static class DbInitializer
         ("Viktor", null, "Horváth", "Hungary")
     ];
 
-    // Town names for the lookup table; applicants are spread across them.
-    private static readonly string[] Towns =
+    // Residential localities for the lookup table; applicants are spread across
+    // them. Each is a real (ZIP, city, state) triple so the register, the detail
+    // card and the "City, ST ZIP" mailing labels all read from one source.
+    private static readonly (string Zip, string Name, string State)[] Localities =
     [
-        "Boston", "Cambridge", "Worcester", "Providence",
-        "Hartford", "Manchester", "Portland", "Burlington"
+        ("02108", "Boston", "MA"),
+        ("02139", "Cambridge", "MA"),
+        ("01608", "Worcester", "MA"),
+        ("02903", "Providence", "RI"),
+        ("06103", "Hartford", "CT"),
+        ("03101", "Manchester", "NH"),
+        ("04101", "Portland", "ME"),
+        ("05401", "Burlington", "VT"),
     ];
 
     /// <summary>
@@ -179,14 +187,12 @@ public static class DbInitializer
             db.CountryCodes.Add(new CountryCode { BaseCode = "C", Code = code, Description = countryNames[i] });
         }
 
-        // Town codes, one per town.
-        var townCodeByName = new Dictionary<string, string>();
-        for (var i = 0; i < Towns.Length; i++)
-        {
-            var code = (i + 1).ToString("D3");
-            townCodeByName[Towns[i]] = code;
-            db.TownCodes.Add(new TownCode { BaseCode = "T", Code = code, Description = Towns[i] });
-        }
+        // Localities, one row per (ZIP, city, state). Saved before the applicants
+        // so their identity Ids exist to be referenced by the LocalityId FK.
+        var localities = Localities
+            .Select(l => new Locality { ZipCode = l.Zip, Name = l.Name, State = l.State })
+            .ToList();
+        db.Localities.AddRange(localities);
 
         await db.SaveChangesAsync();
 
@@ -209,7 +215,7 @@ public static class DbInitializer
         for (var i = 0; i < People.Length; i++)
         {
             var person = People[i];
-            var town = Towns[i % Towns.Length];
+            var locality = localities[i % localities.Count];
             var status = distribution[i % distribution.Length];
 
             var admissionYears = rng.Next(5, 12);
@@ -227,9 +233,8 @@ public static class DbInitializer
                 BirthDate = today.AddDays(-rng.Next(23 * 365, 62 * 365)),
                 AdmissionDate = today.AddDays(-admissionYears * 365 - rng.Next(0, 300)),
                 Address1 = $"{rng.Next(4, 1990)} {streets[rng.Next(streets.Length)]} St",
-                TownCode = townCodeByName[town],
+                LocalityId = locality.Id,
                 CountryCode = countryCodeByName[person.Country],
-                ZipCode = $"0{rng.Next(1000, 9999)}",
                 Email = $"{person.First.ToLowerInvariant()}.{person.Last.ToLowerInvariant()}@example.com",
                 Status = status,
                 CreatedAt = DateTime.UtcNow.AddDays(-rng.Next(400, 800)),

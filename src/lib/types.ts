@@ -98,10 +98,18 @@ export const APPLICATION_STATUSES = [
 
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number]
 
-/** A code/description pair from a lookup table (towns, countries). */
+/** A code/description pair from the country lookup. */
 export interface Lookup {
   code: string
   description: string
+}
+
+/** A residential locality: ZIP, city/town name and state, keyed by id. */
+export interface Locality {
+  id: number
+  zipCode: string
+  name: string
+  state: string
 }
 
 export interface Applicant {
@@ -118,9 +126,15 @@ export interface Applicant {
   birthDate: string
   admissionDate: string
   address1: string
-  townCode: string
-  countryCode: string
+  /** FK to a Locality; null until residence is resolved. Sent on create/edit. */
+  localityId: number | null
+  /** City/town name, from the joined Locality. Read-only (server-composed). */
+  city: string
+  /** Two-letter state, from the joined Locality. Read-only. */
+  state: string
+  /** ZIP, from the joined Locality. Read-only. */
   zipCode: string
+  countryCode: string
   email: string
   status: ApplicationStatus
   /** Null until the application is decided. */
