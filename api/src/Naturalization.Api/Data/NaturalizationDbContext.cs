@@ -83,14 +83,13 @@ public class NaturalizationDbContext(DbContextOptions<NaturalizationDbContext> o
             e.HasIndex(x => x.Name);
         });
 
-        // Country of birth. Code is short; index it (plus BaseCode) so a lookup by
-        // code is a seek, not a scan.
+        // Country of birth. Code is short; index it so a lookup by code is a seek,
+        // not a scan.
         b.Entity<CountryCode>(e =>
         {
-            e.Property(x => x.BaseCode).HasMaxLength(1).IsRequired();
             e.Property(x => x.Code).HasMaxLength(3).IsRequired();
             e.Property(x => x.Description).HasMaxLength(200).IsRequired();
-            e.HasIndex(x => new { x.BaseCode, x.Code }).IsUnique();
+            e.HasIndex(x => x.Code).IsUnique();
         });
 
         // Append-only. No FK, no soft-delete flag, no query filter: this must
