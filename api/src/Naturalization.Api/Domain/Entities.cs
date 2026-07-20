@@ -140,15 +140,12 @@ public class Locality
 }
 
 /// <summary>
-/// A country lookup. <see cref="BaseCode"/> is "C" for every row. <see
-/// cref="Code"/> maps to <see cref="Applicant.CountryCode"/> (country of birth).
+/// A country lookup. <see cref="Code"/> maps to <see cref="Applicant.CountryCode"/>
+/// (country of birth).
 /// </summary>
 public class CountryCode
 {
     public int Id { get; set; }
-
-    /// <summary>"C" for a country.</summary>
-    public string BaseCode { get; set; } = "C";
 
     /// <summary>Up to three characters, mapping to <see cref="Applicant.CountryCode"/>.</summary>
     public string Code { get; set; } = "";
