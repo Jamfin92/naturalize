@@ -184,7 +184,7 @@ public static class DbInitializer
         {
             var code = (i + 1).ToString("D3");
             countryCodeByName[countryNames[i]] = code;
-            db.CountryCodes.Add(new CountryCode { BaseCode = "C", Code = code, Description = countryNames[i] });
+            db.CountryCodes.Add(new CountryCode { Code = code, Description = countryNames[i] });
         }
 
         // Localities, one row per (ZIP, city, state). Saved before the applicants
